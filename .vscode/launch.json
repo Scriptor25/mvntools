@@ -8,7 +8,7 @@
             "type": "java",
             "name": "MvnTools",
             "request": "launch",
-            "mainClass": "io.scriptor.MvnTools",
+            "mainClass": "io.scriptor.Test",
             "projectName": "mvntools",
         }
     ]

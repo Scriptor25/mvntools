@@ -11,8 +11,8 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 public class MvnTools {
 
-    public static void main(String[] args) throws IOException, XmlPullParserException {
-        final var root = MvnArtifact.getArtifactTree("io.scriptor:mvntools:1.0.0");
+    public static void main(String[] args) throws IOException {
+        final var root = MvnArtifact.getArtifact("io.scriptor:mvntools:1.0.0");
         root.dumpTree();
     }
 
@@ -22,6 +22,7 @@ public class MvnTools {
 
     public static Model getModel(File pom) throws IOException, XmlPullParserException {
         final var reader = new MavenXpp3Reader();
+        reader.setAddDefaultEntities(true);
         return reader.read(new FileReader(pom));
     }
 }

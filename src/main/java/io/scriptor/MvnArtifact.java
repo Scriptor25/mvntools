@@ -13,45 +13,8 @@ public class MvnArtifact {
 
     private static final Map<String, MvnArtifact> ARTIFACTS = new HashMap<>();
 
-    public static MvnArtifact getArtifactTree(final String id) throws IOException, XmlPullParserException {
-
-        final var params = id.split(":");
-        final var groupId = params[0];
-        final var artifactId = params[1];
-        final var type = params.length == 3 ? "jar" : params[2];
-        final var version = params.length == 3 ? params[2] : params[3];
-
-        final var procBuilder = new ProcessBuilder(
-                "mvn",
-                "dependency:get",
-                "-DgroupId=" + groupId,
-                "-DartifactId=" + artifactId,
-                "-Dpackaging=" + type,
-                "-Dversion=" + version)
-                .inheritIO()
-                .directory(new File("."));
-        final var proc = procBuilder.start();
-
-        try {
-            final var code = proc.waitFor();
-            if (code != 0) {
-                throw new IllegalStateException(
-                        String.format(
-                                "Maven failed to get '%s:%s:%s': Exit code %d",
-                                groupId,
-                                artifactId,
-                                version,
-                                code));
-            }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-        return getArtifact(groupId, artifactId, type, version);
-    }
-
     public static MvnArtifact getArtifact(final String id)
-            throws IOException, XmlPullParserException {
+            throws IOException {
         final var params = id.split(":");
         return getArtifact(
                 params[0],
@@ -65,12 +28,24 @@ public class MvnArtifact {
             final String artifactId,
             final String type,
             final String version)
-            throws IOException, XmlPullParserException {
+            throws IOException {
         final var id = groupId + ':' + artifactId + ':' + version;
         if (ARTIFACTS.containsKey(id))
             return ARTIFACTS.get(id);
 
-        final var artifact = new MvnArtifact(groupId, artifactId, type, version);
+        MvnArtifact artifact = null;
+        try {
+            artifact = new MvnArtifact(groupId, artifactId, type, version);
+        } catch (XmlPullParserException e) {
+            System.err.printf(
+                    "Failed to materialize '%s:%s:%s:%s': %s%n",
+                    groupId,
+                    artifactId,
+                    type,
+                    version,
+                    e.getMessage());
+        }
+
         ARTIFACTS.put(id, artifact);
         return artifact;
     }
@@ -108,11 +83,40 @@ public class MvnArtifact {
         final var repository = MvnTools.getRepository();
         mPom = new File(repository, mPrefix + ".pom").getCanonicalFile();
 
+        if (!mPom.exists()) {
+            final var procBuilder = new ProcessBuilder(
+                    "mvn",
+                    "dependency:get",
+                    "-DgroupId=" + groupId,
+                    "-DartifactId=" + artifactId,
+                    "-Dpackaging=" + type,
+                    "-Dversion=" + version)
+                    .inheritIO()
+                    .directory(new File("."));
+            final var proc = procBuilder.start();
+
+            try {
+                final var code = proc.waitFor();
+                if (code != 0) {
+                    throw new IllegalStateException(
+                            String.format(
+                                    "Maven failed to get '%s:%s:%s': Exit code %d",
+                                    groupId,
+                                    artifactId,
+                                    version,
+                                    code));
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
         final var model = MvnTools.getModel(mPom);
 
         if (model.getParent() != null) {
             mParent = getArtifact(model.getParent().getId());
-            mProperties.putAll(mParent.mProperties);
+            if (mParent != null)
+                mProperties.putAll(mParent.mProperties);
         } else {
             mParent = null;
         }

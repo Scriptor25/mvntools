@@ -6,18 +6,22 @@ import java.io.IOException;
 
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
-import org.apache.maven.repository.RepositorySystem;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
 
 public class MvnTools {
 
     public static void main(String[] args) throws IOException {
         final var root = MvnArtifact.getArtifact("io.scriptor:mvntools:1.0.0");
         root.dumpTree();
+        Graphviz.fromGraph(root.generateGraph()).height(1000).render(Format.PNG).toFile(new File("export.png"));
     }
 
     public static File getRepository() throws IOException {
-        return RepositorySystem.defaultUserLocalRepository;
+        final var home = System.getProperty("user.home");
+        return new File(home, ".m2/repository").getCanonicalFile();
     }
 
     public static Model getModel(File pom) throws IOException, XmlPullParserException {

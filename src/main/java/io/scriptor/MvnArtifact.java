@@ -1,13 +1,19 @@
 package io.scriptor;
 
+import static guru.nidi.graphviz.model.Factory.graph;
+import static guru.nidi.graphviz.model.Factory.node;
+
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+
+import guru.nidi.graphviz.model.Graph;
 
 public class MvnArtifact {
 
@@ -29,6 +35,7 @@ public class MvnArtifact {
             final String type,
             final String version)
             throws IOException {
+
         final var id = groupId + ':' + artifactId + ':' + version;
         if (ARTIFACTS.containsKey(id))
             return ARTIFACTS.get(id);
@@ -84,15 +91,46 @@ public class MvnArtifact {
         mPom = new File(repository, mPrefix + ".pom").getCanonicalFile();
 
         if (!mPom.exists()) {
+            final var dir = new File(".");
+
+            int mode = 0;
+            try {
+                Runtime.getRuntime().exec("mvn", null, dir).waitFor();
+                mode = 1;
+            } catch (IOException e1) {
+                try {
+                    Runtime.getRuntime().exec("mvn.cmd", null, dir).waitFor();
+                    mode = 2;
+                } catch (IOException e2) {
+                    throw e2;
+                } catch (InterruptedException e) {
+                }
+            } catch (InterruptedException e) {
+            }
+
+            final String exec;
+            switch (mode) {
+                case 1: // mvn executable
+                    exec = "mvn";
+                    break;
+
+                case 2: // mvn.cmd executable
+                    exec = "mvn.cmd";
+                    break;
+
+                default: // no executable
+                    throw new IllegalStateException("no maven executable");
+            }
+
             final var procBuilder = new ProcessBuilder(
-                    "mvn",
+                    exec,
                     "dependency:get",
                     "-DgroupId=" + groupId,
                     "-DartifactId=" + artifactId,
                     "-Dpackaging=" + type,
                     "-Dversion=" + version)
                     .inheritIO()
-                    .directory(new File("."));
+                    .directory(dir);
             final var proc = procBuilder.start();
 
             try {
@@ -176,8 +214,10 @@ public class MvnArtifact {
                     depArtifactId,
                     depType,
                     depVersion);
-            dependencies.add(artifact);
+            if (artifact != null)
+                dependencies.add(artifact);
         }
+
         mDependencies = dependencies.toArray(new MvnArtifact[0]);
     }
 
@@ -232,5 +272,20 @@ public class MvnArtifact {
         System.out.printf("%s%s%n", spaces, getId());
         for (int i = 0; i < mDependencies.length; ++i)
             mDependencies[i].dumpTree(depth + 1, wasLast, i == mDependencies.length - 1);
+    }
+
+    public Graph generateGraph() {
+        return generateGraph(graph().directed());
+    }
+
+    private Graph generateGraph(Graph graph) {
+        graph = graph.with(
+                node(getId()).link(
+                        (String[]) Arrays.stream(mDependencies)
+                                .map(dep -> dep.getId())
+                                .toArray(size -> new String[size])));
+        for (final var dep : mDependencies)
+            graph = dep.generateGraph(graph);
+        return graph;
     }
 }

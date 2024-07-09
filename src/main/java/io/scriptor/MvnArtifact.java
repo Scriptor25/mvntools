@@ -15,12 +15,25 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 import guru.nidi.graphviz.model.Graph;
 
+/**
+ * Representation of a maven artifact
+ */
 public class MvnArtifact {
 
+    /**
+     * Cache for previously materialized artifacts, indexed by id
+     * (groupId:artifactId:packaging:version)
+     */
     private static final Map<String, MvnArtifact> ARTIFACTS = new HashMap<>();
 
-    public static MvnArtifact getArtifact(final String id)
-            throws IOException {
+    /**
+     * Get or materialize an artifact by id.
+     * 
+     * @param id the artifact id (groupId:artifactId:packaging:version)
+     * @return materialized artifact, or null if materialization fails
+     * @throws IOException if any
+     */
+    public static MvnArtifact getArtifact(final String id) throws IOException {
         final var params = id.split(":");
         return getArtifact(
                 params[0],
@@ -29,6 +42,16 @@ public class MvnArtifact {
                 params.length == 3 ? params[2] : params[3]);
     }
 
+    /**
+     * Get or materialize an artifact by id.
+     * 
+     * @param groupId    the groupId
+     * @param artifactId the artifactId
+     * @param type       the type/packaging
+     * @param version    the version
+     * @return materialized artifact, or null if materialization fails
+     * @throws IOException if any
+     */
     public static MvnArtifact getArtifact(
             final String groupId,
             final String artifactId,
@@ -57,7 +80,16 @@ public class MvnArtifact {
         return artifact;
     }
 
-    public static String getProperty(final Map<String, String> properties, String key) {
+    /**
+     * Get a property from a map of strings indexed by strings, but only if the key
+     * is in format "${...}".
+     * This also works recursively.
+     * 
+     * @param properties the properties
+     * @param key        the key
+     * @return the value of the property or key if it is not a property
+     */
+    private static String getProperty(final Map<String, String> properties, String key) {
         while (key != null && key.startsWith("${") && key.endsWith("}")) {
             key = properties.getOrDefault(key.substring(2, key.length() - 1), null);
         }
@@ -74,6 +106,16 @@ public class MvnArtifact {
     private final MvnArtifact[] mDependencies;
     private final Map<String, String> mProperties = new HashMap<>();
 
+    /**
+     * Materialize a new artifact.
+     * 
+     * @param groupId    the groupId
+     * @param artifactId the artifactId
+     * @param type       the type/packaging
+     * @param version    the version
+     * @throws IOException            if any or if no maven executable is found
+     * @throws XmlPullParserException if any
+     */
     private MvnArtifact(
             final String groupId,
             final String artifactId,
@@ -145,7 +187,6 @@ public class MvnArtifact {
                                     code));
                 }
             } catch (InterruptedException e) {
-                e.printStackTrace();
             }
         }
 
@@ -257,13 +298,24 @@ public class MvnArtifact {
         return mDependencies;
     }
 
+    /**
+     * Dump a pretty formatted dependency tree, starting from this artifact.
+     */
     public void dumpTree() {
         System.out.println(getId());
         for (int i = 0; i < mDependencies.length; ++i)
             mDependencies[i].dumpTree(1, new Vector<>(), i == mDependencies.length - 1);
     }
 
-    private void dumpTree(int depth, List<Boolean> wasLast, boolean last) {
+    /**
+     * Dump a pretty formatted dependency tree, starting from this artifact.
+     * 
+     * @param depth   the depth
+     * @param wasLast a list of all previous depths, if they were the last
+     *                dependency
+     * @param last    if this artifact is the last dependency of the previous
+     */
+    private void dumpTree(final int depth, final List<Boolean> wasLast, final boolean last) {
         String spaces = "";
         for (int i = 1; i < depth; ++i)
             spaces += wasLast.get(i - 1) ? "   " : "|  ";
@@ -275,10 +327,21 @@ public class MvnArtifact {
         wasLast.remove(depth - 1);
     }
 
+    /**
+     * Generate a graphviz graph with all dependencies, starting from this artifact.
+     * 
+     * @return a graphviz graph
+     */
     public Graph generateGraph() {
         return generateGraph(graph().directed());
     }
 
+    /**
+     * Generate a graphviz graph with all dependencies, starting from this artifact.
+     * 
+     * @param graph the graph
+     * @return graph
+     */
     private Graph generateGraph(Graph graph) {
         graph = graph.with(
                 node(getId()).link(

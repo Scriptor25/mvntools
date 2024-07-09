@@ -272,6 +272,7 @@ public class MvnArtifact {
         System.out.printf("%s%s%n", spaces, getId());
         for (int i = 0; i < mDependencies.length; ++i)
             mDependencies[i].dumpTree(depth + 1, wasLast, i == mDependencies.length - 1);
+        wasLast.remove(depth - 1);
     }
 
     public Graph generateGraph() {

@@ -15,6 +15,7 @@ import guru.nidi.graphviz.engine.Graphviz;
 public class Tests {
 
     public static final String ID = "io.scriptor:mvntools:1.0.0";
+    public static final String[] FILTER = { "!.class" };
 
     @Test
     @DisplayName("Get Artifact")
@@ -42,7 +43,7 @@ public class Tests {
 
     @Test
     @DisplayName("Get Artifact + Read All Resources Recursively")
-    public void testExtractResources() throws IOException {
+    public void testReadResources() throws IOException {
         final var root = MvnArtifact.getArtifact(ID);
         for (final var dep : root) {
             final var jar = dep.getJar();
@@ -50,8 +51,32 @@ public class Tests {
                 final var entries = jarFile.entries();
                 while (entries.hasMoreElements()) {
                     final var entry = entries.nextElement();
-                    if (!entry.isDirectory() && !entry.getName().endsWith(".class"))
+                    if (!entry.isDirectory())
                         System.out.println(entry.getName());
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Get Artifact + Read All Resources Recursively + Filter")
+    public void testFilterResources() throws IOException {
+        final var root = MvnArtifact.getArtifact(ID);
+        for (final var dep : root) {
+            final var jar = dep.getJar();
+            try (final var jarFile = new JarFile(jar)) {
+                final var entries = jarFile.entries();
+                while (entries.hasMoreElements()) {
+                    final var entry = entries.nextElement();
+                    if (!entry.isDirectory()) {
+                        for (var filter : FILTER) {
+                            final var negate = filter.startsWith("!");
+                            if (negate)
+                                filter = filter.substring(1);
+                            if (!entry.getName().contains(filter))
+                                System.out.println(entry.getName());
+                        }
+                    }
                 }
             }
         }

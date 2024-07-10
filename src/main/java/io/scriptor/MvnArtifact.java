@@ -7,8 +7,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Vector;
 
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
@@ -18,7 +20,7 @@ import guru.nidi.graphviz.model.Graph;
 /**
  * Representation of a maven artifact
  */
-public class MvnArtifact {
+public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Cache for previously materialized artifacts, indexed by id
@@ -81,6 +83,79 @@ public class MvnArtifact {
     }
 
     /**
+     * Fetch a remote maven artifact into the local repository.
+     * 
+     * @param groupId    the groupId
+     * @param artifactId the artifactId
+     * @param type       the type/packaging
+     * @param version    the version
+     * @throws IOException if any
+     */
+    public static void fetchArtifact(
+            final String groupId,
+            final String artifactId,
+            final String type,
+            final String version)
+            throws IOException {
+        final var dir = new File(".");
+
+        int mode = 0;
+        try {
+            Runtime.getRuntime().exec("mvn", null, dir).waitFor();
+            mode = 1;
+        } catch (IOException e1) {
+            try {
+                Runtime.getRuntime().exec("mvn.cmd", null, dir).waitFor();
+                mode = 2;
+            } catch (IOException e2) {
+                throw e2;
+            } catch (InterruptedException e) {
+            }
+        } catch (InterruptedException e) {
+        }
+
+        final String exec;
+        switch (mode) {
+            case 1: // mvn executable
+                exec = "mvn";
+                break;
+
+            case 2: // mvn.cmd executable
+                exec = "mvn.cmd";
+                break;
+
+            default: // no executable
+                throw new IllegalStateException("No maven executable");
+        }
+
+        final var procBuilder = new ProcessBuilder(
+                exec,
+                "dependency:get",
+                "-DgroupId=" + groupId,
+                "-DartifactId=" + artifactId,
+                "-Dpackaging=" + type,
+                "-Dversion=" + version)
+                .inheritIO()
+                .directory(dir);
+        final var proc = procBuilder.start();
+
+        try {
+            final var code = proc.waitFor();
+            if (code != 0) {
+                throw new IllegalStateException(
+                        String.format(
+                                "Failed to fetch '%s:%s:%s': Exit code %d",
+                                groupId,
+                                artifactId,
+                                version,
+                                code));
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
      * Get a property from a map of strings indexed by strings, but only if the key
      * is in format "${...}".
      * This also works recursively.
@@ -121,73 +196,19 @@ public class MvnArtifact {
             final String artifactId,
             final String type,
             final String version)
-            throws IOException, XmlPullParserException {
+            throws XmlPullParserException, IOException {
 
         mPrefix = String.format(
-                "%1$s/%2$s/%3$s/%2$s-%3$s",
+                "%2$s%1$s%3$s%1$s%4$s%1$s%3$s-%4$s",
+                File.separator,
                 groupId.replaceAll("\\.", "/"),
                 artifactId,
                 version);
 
-        final var repository = MvnTools.getRepository();
-        mPom = new File(repository, mPrefix + ".pom").getCanonicalFile();
+        mPom = new File(MvnTools.getRepository(), mPrefix + ".pom");
 
         if (!mPom.exists()) {
-            final var dir = new File(".");
-
-            int mode = 0;
-            try {
-                Runtime.getRuntime().exec("mvn", null, dir).waitFor();
-                mode = 1;
-            } catch (IOException e1) {
-                try {
-                    Runtime.getRuntime().exec("mvn.cmd", null, dir).waitFor();
-                    mode = 2;
-                } catch (IOException e2) {
-                    throw e2;
-                } catch (InterruptedException e) {
-                }
-            } catch (InterruptedException e) {
-            }
-
-            final String exec;
-            switch (mode) {
-                case 1: // mvn executable
-                    exec = "mvn";
-                    break;
-
-                case 2: // mvn.cmd executable
-                    exec = "mvn.cmd";
-                    break;
-
-                default: // no executable
-                    throw new IllegalStateException("no maven executable");
-            }
-
-            final var procBuilder = new ProcessBuilder(
-                    exec,
-                    "dependency:get",
-                    "-DgroupId=" + groupId,
-                    "-DartifactId=" + artifactId,
-                    "-Dpackaging=" + type,
-                    "-Dversion=" + version)
-                    .inheritIO()
-                    .directory(dir);
-            final var proc = procBuilder.start();
-
-            try {
-                final var code = proc.waitFor();
-                if (code != 0) {
-                    throw new IllegalStateException(
-                            String.format(
-                                    "Maven failed to get '%s:%s:%s': Exit code %d",
-                                    groupId,
-                                    artifactId,
-                                    version,
-                                    code));
-                }
-            } catch (InterruptedException e) {
-            }
+            fetchArtifact(groupId, artifactId, type, version);
         }
 
         final var model = MvnTools.getModel(mPom);
@@ -290,6 +311,10 @@ public class MvnArtifact {
         return mPom;
     }
 
+    public File getJar() {
+        return new File(MvnTools.getRepository(), mPrefix + ".jar");
+    }
+
     public MvnArtifact getParent() {
         return mParent;
     }
@@ -351,5 +376,29 @@ public class MvnArtifact {
         for (final var dep : mDependencies)
             graph = dep.generateGraph(graph);
         return graph;
+    }
+
+    @Override
+    public Iterator<MvnArtifact> iterator() {
+        return new Iterator<MvnArtifact>() {
+
+            private int i = 0;
+
+            @Override
+            public boolean hasNext() {
+                return i < mDependencies.length;
+            }
+
+            @Override
+            public MvnArtifact next() {
+                if (!hasNext())
+                    throw new NoSuchElementException(
+                            String.format(
+                                    "Index %d out of range [0;%d[",
+                                    i,
+                                    mDependencies.length));
+                return mDependencies[i++];
+            }
+        };
     }
 }

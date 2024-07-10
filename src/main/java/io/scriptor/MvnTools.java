@@ -20,11 +20,10 @@ public class MvnTools {
      * Get the default maven repository for the current user.
      * 
      * @return File pointing to the maven repository
-     * @throws IOException if any
      */
-    public static File getRepository() throws IOException {
+    public static File getRepository() {
         final var home = System.getProperty("user.home");
-        return new File(home, ".m2/repository").getCanonicalFile();
+        return new File(home, ".m2" + File.separator + "repository");
     }
 
     /**
@@ -32,7 +31,9 @@ public class MvnTools {
      * 
      * @param pom the pom file
      * @return Model containing the read-in pom
-     * @throws IOException            if any
+     * @throws IOException            if the file does not exist, is a directory
+     *                                rather than a regular file, or for some other
+     *                                reason cannot be opened for reading.
      * @throws XmlPullParserException if any
      */
     public static Model getModel(final File pom) throws IOException, XmlPullParserException {

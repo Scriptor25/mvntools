@@ -48,6 +48,14 @@
             <version>0.18.1</version>
         </dependency>
 
+        <!-- Testing -->
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-api</artifactId>
+            <version>5.10.3</version>
+        </dependency>
+
     </dependencies>
 
 </project>

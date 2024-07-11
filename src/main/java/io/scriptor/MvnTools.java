@@ -45,6 +45,14 @@ public class MvnTools {
         return reader.read(new FileReader(pom));
     }
 
+    /**
+     * Generate, render and export a GraphViz graph for the given artifact into a
+     * file.
+     * 
+     * @param artifact the artifact
+     * @param file     the output file
+     * @throws IOException if any
+     */
     public static void renderGraph(final MvnArtifact artifact, final File file) throws IOException {
         Graphviz.fromGraph(artifact.generateGraph())
                 .render(Format.SVG)

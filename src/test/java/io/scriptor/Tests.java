@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 public class Tests {
 
-    public static final String ID = "io.scriptor:mvntools:1.0.0";
+    public static final String ID = "org.apache.maven:maven-core:3.9.8";
 
     @Test
     @DisplayName("Get Artifact")

@@ -230,6 +230,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         mPackaging = model.getPackaging();
         mVersion = model.getVersion() == null ? model.getParent().getVersion() : model.getVersion();
 
+        mProperties.put("project.artifactId", mArtifactId);
+        mProperties.put("project.groupId", mGroupId);
         mProperties.put("project.version", mVersion);
 
         if (model.getDependencyManagement() != null) {

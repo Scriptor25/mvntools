@@ -8,6 +8,9 @@ import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
+
 /**
  * The mvntools api class
  */
@@ -40,5 +43,11 @@ public class MvnTools {
         final var reader = new MavenXpp3Reader();
         reader.setAddDefaultEntities(true);
         return reader.read(new FileReader(pom));
+    }
+
+    public static void renderGraph(final MvnArtifact artifact, final File file) throws IOException {
+        Graphviz.fromGraph(artifact.generateGraph())
+                .render(Format.SVG)
+                .toFile(file);
     }
 }

@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Vector;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
@@ -321,6 +323,33 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     public MvnArtifact[] getDependencies() {
         return mDependencies;
+    }
+
+    /**
+     * Open the artifacts jar.
+     * 
+     * @return the jarfile
+     * @throws IOException if any
+     */
+    public JarFile openJar() throws IOException {
+        return new JarFile(getJar());
+    }
+
+    /**
+     * Create an iterable over all elements in the artifacts jar.
+     * 
+     * @return the iterable
+     */
+    public Iterable<JarEntry> getJarIterable() {
+        return () -> {
+            try {
+                return openJar()
+                        .entries()
+                        .asIterator();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        };
     }
 
     /**

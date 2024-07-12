@@ -91,13 +91,15 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param artifactId the artifactId
      * @param type       the type/packaging
      * @param version    the version
+     * @param transitive if not only the artifacts pom is required
      * @throws IOException if any
      */
     public static void fetchArtifact(
             final String groupId,
             final String artifactId,
             final String type,
-            final String version)
+            final String version,
+            final boolean transitive)
             throws IOException {
         final var dir = new File(".");
 
@@ -136,7 +138,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 "-DgroupId=" + groupId,
                 "-DartifactId=" + artifactId,
                 "-Dpackaging=" + type,
-                "-Dversion=" + version)
+                "-Dversion=" + version,
+                "-Dtransitive=" + transitive)
                 .inheritIO()
                 .directory(dir);
         final var proc = procBuilder.start();
@@ -210,7 +213,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         mPom = new File(MvnTools.getRepository(), mPrefix + ".pom");
 
         if (!mPom.exists()) {
-            fetchArtifact(groupId, artifactId, type, version);
+            fetchArtifact(groupId, artifactId, type, version, true);
         }
 
         final var model = MvnTools.getModel(mPom);
@@ -334,6 +337,9 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @throws IOException if any
      */
     public JarFile openJar() throws IOException {
+        final var jar = getJar();
+        if (!jar.exists())
+            fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);
         return new JarFile(getJar());
     }
 

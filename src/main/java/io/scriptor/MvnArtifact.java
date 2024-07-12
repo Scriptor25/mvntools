@@ -14,6 +14,7 @@ import java.util.NoSuchElementException;
 import java.util.Vector;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.stream.Stream;
 
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
@@ -348,7 +349,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     }
 
     /**
-     * Create an iterable over all elements in the artifacts jar.
+     * Create an iterable over all elements in the artifacts package.
      * 
      * @return the iterable
      */
@@ -376,6 +377,20 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 throw new RuntimeException(e);
             }
         };
+    }
+
+    /**
+     * Open a stream over the elements inside the artifacts package.
+     * 
+     * @return the stream
+     * @throws IOException if any
+     */
+    public Stream<JarEntry> getStream() throws IOException {
+        final var pkg = openPackage();
+        if (pkg != null)
+            return pkg.stream();
+
+        return Stream.empty();
     }
 
     /**

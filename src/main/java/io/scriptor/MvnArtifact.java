@@ -149,9 +149,10 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             if (code != 0) {
                 throw new IllegalStateException(
                         String.format(
-                                "Failed to fetch '%s:%s:%s': Exit code %d",
+                                "Failed to fetch '%s:%s:%s:%s': Exit code %d",
                                 groupId,
                                 artifactId,
+                                type,
                                 version,
                                 code));
             }
@@ -337,6 +338,9 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @throws IOException if any
      */
     public JarFile openPackage() throws IOException {
+        if (!(mPackaging.equals("jar") || mPackaging.equals("war")))
+            return null;
+
         final var file = getPackage();
         if (!file.exists())
             fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);

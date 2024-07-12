@@ -44,7 +44,7 @@ public class Tests {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
         for (final var dep : root) {
-            for (final var entry : dep.getJarIterable()) {
+            for (final var entry : dep.getEntries()) {
                 if (!entry.isDirectory())
                     System.out.println(entry.getName());
             }

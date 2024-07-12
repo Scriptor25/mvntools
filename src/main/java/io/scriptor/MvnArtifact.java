@@ -318,8 +318,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         return mPom;
     }
 
-    public File getJar() {
-        return new File(MvnTools.getRepository(), mPrefix + ".jar");
+    public File getPackage() {
+        return new File(MvnTools.getRepository(), mPrefix + "." + mPackaging);
     }
 
     public MvnArtifact getParent() {
@@ -336,13 +336,11 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @return the jarfile or null if the dependency is not a jar
      * @throws IOException if any
      */
-    public JarFile openJar() throws IOException {
-        if (!mPackaging.equals("jar"))
-            return null;
-        final var jar = getJar();
-        if (!jar.exists())
+    public JarFile openPackage() throws IOException {
+        final var file = getPackage();
+        if (!file.exists())
             fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);
-        return new JarFile(getJar());
+        return new JarFile(getPackage());
     }
 
     /**
@@ -350,13 +348,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @return the iterable
      */
-    public Iterable<JarEntry> getJarIterable() {
+    public Iterable<JarEntry> getEntries() {
         return () -> {
             try {
-                final var jar = openJar();
-                if (jar != null)
-                    return jar.entries()
-                            .asIterator();
+                final var pkg = openPackage();
+                if (pkg != null)
+                    return pkg.entries().asIterator();
 
                 return new Iterator<JarEntry>() {
 

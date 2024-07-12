@@ -333,10 +333,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     /**
      * Open the artifacts jar.
      * 
-     * @return the jarfile
+     * @return the jarfile or null if the dependency is not a jar
      * @throws IOException if any
      */
     public JarFile openJar() throws IOException {
+        if (!mPackaging.equals("jar"))
+            return null;
         final var jar = getJar();
         if (!jar.exists())
             fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);
@@ -351,9 +353,24 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     public Iterable<JarEntry> getJarIterable() {
         return () -> {
             try {
-                return openJar()
-                        .entries()
-                        .asIterator();
+                final var jar = openJar();
+                if (jar != null)
+                    return jar.entries()
+                            .asIterator();
+
+                return new Iterator<JarEntry>() {
+
+                    @Override
+                    public boolean hasNext() {
+                        return false;
+                    }
+
+                    @Override
+                    public JarEntry next() {
+                        throw new NoSuchElementException();
+                    }
+
+                };
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

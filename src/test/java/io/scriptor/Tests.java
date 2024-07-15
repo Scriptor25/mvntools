@@ -44,7 +44,7 @@ public class Tests {
     public void testReadResources() throws IOException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
-        for (final var entry : root.getEntries())
+        for (final var entry : root.entries())
             if (!entry.isDirectory())
                 System.out.println(entry.getName());
     }
@@ -54,7 +54,7 @@ public class Tests {
     public void testGetEntryStream() throws MalformedURLException, IOException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
-        for (final var entry : root.getEntries())
+        for (final var entry : root.entries())
             if (!entry.isDirectory() && !entry.getName().endsWith(".class")) {
                 try (final var stream = root.openEntry(entry)) {
                     stream.transferTo(System.out);

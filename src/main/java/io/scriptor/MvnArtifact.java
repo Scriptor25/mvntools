@@ -356,7 +356,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @return the iterable
      */
-    public Iterable<JarEntry> getEntries() {
+    public Iterable<JarEntry> entries() {
         return () -> {
             try {
                 final var pkg = openPackage();
@@ -388,7 +388,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @return the stream
      * @throws IOException if any
      */
-    public Stream<JarEntry> getStream() throws IOException {
+    public Stream<JarEntry> stream() throws IOException {
         final var pkg = openPackage();
         if (pkg != null)
             return pkg.stream();
@@ -396,6 +396,15 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         return Stream.empty();
     }
 
+    /**
+     * Open an input stream from a jar entry. You get one from either using stream()
+     * or entries().
+     * 
+     * @param entry the jar entry
+     * @return an input stream to the entry
+     * @throws MalformedURLException if any
+     * @throws IOException           if any
+     */
     public InputStream openEntry(final JarEntry entry) throws MalformedURLException, IOException {
         final var pkgFile = getPackage();
         final var name = entry.getName();

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,15 +40,26 @@ public class Tests {
     }
 
     @Test
-    @DisplayName("Get Artifact + Read All Resources Recursively")
+    @DisplayName("Get Artifact + Read All Resources")
     public void testReadResources() throws IOException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
-        for (final var dep : root) {
-            for (final var entry : dep.getEntries()) {
-                if (!entry.isDirectory())
-                    System.out.println(entry.getName());
+        for (final var entry : root.getEntries())
+            if (!entry.isDirectory())
+                System.out.println(entry.getName());
+    }
+
+    @Test
+    @DisplayName("Get Artifact + Read All Resources + Get Stream For Entry")
+    public void testGetEntryStream() throws MalformedURLException, IOException {
+        final var root = MvnArtifact.getArtifact(ID);
+        assertNotNull(root);
+        for (final var entry : root.getEntries())
+            if (!entry.isDirectory() && !entry.getName().endsWith(".class")) {
+                try (final var stream = root.openEntry(entry)) {
+                    stream.transferTo(System.out);
+                    System.out.flush();
+                }
             }
-        }
     }
 }

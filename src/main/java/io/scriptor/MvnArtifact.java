@@ -5,6 +5,9 @@ import static guru.nidi.graphviz.model.Factory.node;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -391,6 +394,14 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             return pkg.stream();
 
         return Stream.empty();
+    }
+
+    public InputStream openEntry(final JarEntry entry) throws MalformedURLException, IOException {
+        final var pkgFile = getPackage();
+        final var name = entry.getName();
+
+        final var url = new URL("jar:file:" + pkgFile.getCanonicalPath().replaceAll("\\\\", "/") + "!/" + name);
+        return url.openStream();
     }
 
     /**

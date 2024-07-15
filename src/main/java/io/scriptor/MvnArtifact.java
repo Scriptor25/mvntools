@@ -208,6 +208,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             final String version)
             throws XmlPullParserException, IOException {
 
+        // generate a prefix for the artifact for later use
         mPrefix = String.format(
                 "%2$s%1$s%3$s%1$s%4$s%1$s%3$s-%4$s",
                 File.separator,
@@ -217,12 +218,16 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         mPom = new File(MvnTools.getRepository(), mPrefix + ".pom");
 
+        // if the pom file does not exist, i.e. the artifact is not yet in the local
+        // repo, then fetch it from the remote
         if (!mPom.exists()) {
             fetchArtifact(groupId, artifactId, packaging, version, true);
         }
 
+        // parse the pom file
         final var model = MvnTools.getModel(mPom);
 
+        // preprocess the parent artifact, if it has one
         if (model.getParent() != null) {
             mParent = getArtifact(model.getParent().getId());
             if (mParent != null)
@@ -231,17 +236,23 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             mParent = null;
         }
 
+        // copy the properties from the model into the artifacts properties
         model.getProperties().forEach((key, value) -> mProperties.put((String) key, (String) value));
 
+        // check for inherited groupid and version
         mGroupId = model.getGroupId() == null ? model.getParent().getGroupId() : model.getGroupId();
         mArtifactId = model.getArtifactId();
         mPackaging = model.getPackaging();
         mVersion = model.getVersion() == null ? model.getParent().getVersion() : model.getVersion();
 
+        // define default properties that MUST be provided for the system to work 100%
+        // (or at least 99.999%)
         mProperties.put("project.artifactId", mArtifactId);
         mProperties.put("project.groupId", mGroupId);
         mProperties.put("project.version", mVersion);
 
+        // set versions and other properties from the dependency management part of the
+        // model
         if (model.getDependencyManagement() != null) {
             for (final var dependency : model.getDependencyManagement().getDependencies()) {
                 final var depGroupId = getProperty(mProperties, dependency.getGroupId());
@@ -259,6 +270,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             }
         }
 
+        // retrieve all dependencies
         final List<MvnArtifact> dependencies = new Vector<>();
         for (final var dependency : model.getDependencies()) {
             final var depGroupId = getProperty(mProperties, dependency.getGroupId());
@@ -292,6 +304,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 dependencies.add(artifact);
         }
 
+        // make the dependencies list an array
         mDependencies = dependencies.toArray(new MvnArtifact[0]);
     }
 
@@ -312,6 +325,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     }
 
     public String getId() {
+        // e.g. io.scriptor:mvntools:jar:1.0.0
         return mGroupId + ':' + mArtifactId + ':' + mPackaging + ':' + mVersion;
     }
 
@@ -342,13 +356,16 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @throws IOException if any
      */
     public JarFile openPackage() throws IOException {
+        // only jar and war files can be unpacked using the java jar api
         if (!(mPackaging.equals("jar") || mPackaging.equals("war")))
             return null;
 
+        // if the jar/war does not exist yet, maybe because maven is lazy, fetch it
         final var file = getPackageFile();
         if (!file.exists())
             fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);
-        return new JarFile(getPackageFile());
+
+        return new JarFile(file);
     }
 
     /**
@@ -363,6 +380,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 if (pkg != null)
                     return pkg.entries().asIterator();
 
+                // there unfortunatly is no empty iterator (or so do i think)
                 return new Iterator<JarEntry>() {
 
                     @Override
@@ -393,6 +411,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         if (pkg != null)
             return pkg.stream();
 
+        // why is there an empty stream but no empty iterator?! (see the one method
+        // above)
         return Stream.empty();
     }
 
@@ -409,6 +429,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         final var pkgFile = getPackageFile();
         final var name = entry.getName();
 
+        // jar url, e.g. jar:file:/path/to/my/jar/myjar.jar!/my/entry/name
         final var url = new URL("jar:file:" + pkgFile.getCanonicalPath().replaceAll("\\\\", "/") + "!/" + name);
         return url.openStream();
     }

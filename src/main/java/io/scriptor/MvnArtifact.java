@@ -55,7 +55,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @param groupId    the groupId
      * @param artifactId the artifactId
-     * @param type       the type/packaging
+     * @param packaging  the packaging
      * @param version    the version
      * @return materialized artifact, or null if materialization fails
      * @throws IOException if any
@@ -63,7 +63,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     public static MvnArtifact getArtifact(
             final String groupId,
             final String artifactId,
-            final String type,
+            final String packaging,
             final String version)
             throws IOException {
 
@@ -73,13 +73,13 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         MvnArtifact artifact = null;
         try {
-            artifact = new MvnArtifact(groupId, artifactId, type, version);
+            artifact = new MvnArtifact(groupId, artifactId, packaging, version);
         } catch (XmlPullParserException e) {
             System.err.printf(
                     "Failed to materialize '%s:%s:%s:%s': %s%n",
                     groupId,
                     artifactId,
-                    type,
+                    packaging,
                     version,
                     e.getMessage());
         }
@@ -93,7 +93,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @param groupId    the groupId
      * @param artifactId the artifactId
-     * @param type       the type/packaging
+     * @param packaging  the packaging
      * @param version    the version
      * @param transitive if not only the artifacts pom is required
      * @throws IOException if any
@@ -101,7 +101,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     public static void fetchArtifact(
             final String groupId,
             final String artifactId,
-            final String type,
+            final String packaging,
             final String version,
             final boolean transitive)
             throws IOException {
@@ -141,7 +141,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 "dependency:get",
                 "-DgroupId=" + groupId,
                 "-DartifactId=" + artifactId,
-                "-Dpackaging=" + type,
+                "-Dpackaging=" + packaging,
                 "-Dversion=" + version,
                 "-Dtransitive=" + transitive)
                 .inheritIO()
@@ -156,7 +156,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                                 "Failed to fetch '%s:%s:%s:%s': Exit code %d",
                                 groupId,
                                 artifactId,
-                                type,
+                                packaging,
                                 version,
                                 code));
             }
@@ -196,7 +196,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @param groupId    the groupId
      * @param artifactId the artifactId
-     * @param type       the type/packaging
+     * @param packaging  the packaging
      * @param version    the version
      * @throws IOException            if any or if no maven executable is found
      * @throws XmlPullParserException if any
@@ -204,7 +204,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     private MvnArtifact(
             final String groupId,
             final String artifactId,
-            final String type,
+            final String packaging,
             final String version)
             throws XmlPullParserException, IOException {
 
@@ -218,7 +218,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         mPom = new File(MvnTools.getRepository(), mPrefix + ".pom");
 
         if (!mPom.exists()) {
-            fetchArtifact(groupId, artifactId, type, version, true);
+            fetchArtifact(groupId, artifactId, packaging, version, true);
         }
 
         final var model = MvnTools.getModel(mPom);
@@ -323,7 +323,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         return mPom;
     }
 
-    public File getPackage() {
+    public File getPackageFile() {
         return new File(MvnTools.getRepository(), mPrefix + "." + mPackaging);
     }
 
@@ -345,10 +345,10 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         if (!(mPackaging.equals("jar") || mPackaging.equals("war")))
             return null;
 
-        final var file = getPackage();
+        final var file = getPackageFile();
         if (!file.exists())
             fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);
-        return new JarFile(getPackage());
+        return new JarFile(getPackageFile());
     }
 
     /**
@@ -406,7 +406,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @throws IOException           if any
      */
     public InputStream openEntry(final JarEntry entry) throws MalformedURLException, IOException {
-        final var pkgFile = getPackage();
+        final var pkgFile = getPackageFile();
         final var name = entry.getName();
 
         final var url = new URL("jar:file:" + pkgFile.getCanonicalPath().replaceAll("\\\\", "/") + "!/" + name);

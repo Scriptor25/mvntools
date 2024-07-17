@@ -308,6 +308,11 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         mDependencies = dependencies.toArray(new MvnArtifact[0]);
     }
 
+    @Override
+    public String toString() {
+        return getId();
+    }
+
     public String getGroupId() {
         return mGroupId;
     }

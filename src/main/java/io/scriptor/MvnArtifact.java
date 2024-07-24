@@ -307,12 +307,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                     depArtifactId,
                     depType,
                     depVersion);
-            if (artifact != null)
+            if (artifact != null && !dependencies.contains(artifact))
                 dependencies.add(artifact);
         }
 
         // make the dependencies list an array
-        mDependencies = dependencies.toArray(new MvnArtifact[0]);
+        mDependencies = dependencies.toArray(MvnArtifact[]::new);
     }
 
     @Override

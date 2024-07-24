@@ -262,6 +262,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 final var depScope = getProperty(mProperties, dependency.getScope());
                 final var depOptional = getProperty(mProperties, dependency.getOptional());
 
+                if ("import".equals(depScope)) {
+                    final var imported = getArtifact(depGroupId, depArtifactId, depType, depVersion);
+                    if (imported != null)
+                        mProperties.putAll(imported.mProperties);
+                }
+
                 final var id = depGroupId + '$' + depArtifactId;
                 mProperties.put(id + ".type", depType);
                 mProperties.put(id + ".version", depVersion);

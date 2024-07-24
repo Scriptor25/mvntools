@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 public class Tests {
 
-    public static final String ID = "org.apache.maven:maven-core:3.9.8";
+    public static final String ID = "de.auctores.dev:patchmgr:0.0.1-SNAPSHOT";
 
     @Test
     @DisplayName("Get Artifact")

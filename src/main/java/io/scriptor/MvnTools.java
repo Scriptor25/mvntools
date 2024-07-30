@@ -29,7 +29,7 @@ public class MvnTools {
 
             @Override
             public String format(final LogRecord rec) {
-                return "[%s][%s] %s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
+                return "[%s][%s]%n%s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
             }
         });
 

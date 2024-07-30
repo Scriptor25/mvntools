@@ -34,11 +34,6 @@ public class MvnTools {
             }
         });
 
-        try {
-            handler.setEncoding("UTF-8");
-        } catch (UnsupportedEncodingException e) {
-        }
-
         logger.setUseParentHandlers(false);
         logger.addHandler(handler);
     }

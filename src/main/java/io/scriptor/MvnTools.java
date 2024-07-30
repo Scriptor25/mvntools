@@ -29,7 +29,7 @@ public class MvnTools {
 
             @Override
             public String format(final LogRecord rec) {
-                return "[%s][%s]%n%s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
+                return "[%s][%s] %s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
             }
         });
 
@@ -56,15 +56,19 @@ public class MvnTools {
      * 
      * @param pom the pom file
      * @return Model containing the read-in pom
-     * @throws IOException            if the file does not exist, is a directory
-     *                                rather than a regular file, or for some other
-     *                                reason cannot be opened for reading.
-     * @throws XmlPullParserException if any
+     * @throws IOException if the file does not exist, is a directory
+     *                     rather than a regular file, or for some other
+     *                     reason cannot be opened for reading.
      */
-    public static Model getModel(final File pom) throws IOException, XmlPullParserException {
+    public static Model getModel(final File pom) throws IOException {
         final var reader = new MavenXpp3Reader();
         reader.setAddDefaultEntities(true);
-        return reader.read(new FileReader(pom));
+        try {
+            return reader.read(new FileReader(pom));
+        } catch (final XmlPullParserException e) {
+            getLogger().warning(() -> "Failed to get model for %s: %s".formatted(pom, e));
+            return new Model();
+        }
     }
 
     /**

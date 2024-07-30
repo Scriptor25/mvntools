@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -16,14 +17,14 @@ public class Tests {
 
     @Test
     @DisplayName("Get Artifact")
-    public void testGetArtifact() throws IOException {
+    public void testGetArtifact() throws IOException, XmlPullParserException, InterruptedException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
     }
 
     @Test
     @DisplayName("Get Artifact + Dump Dependency Tree")
-    public void testDumpTree() throws IOException {
+    public void testDumpTree() throws IOException, XmlPullParserException, InterruptedException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
         System.out.println(root.toTree());
@@ -31,7 +32,7 @@ public class Tests {
 
     @Test
     @DisplayName("Get Artifact + Render Graph")
-    public void testRenderGraph() throws IOException {
+    public void testRenderGraph() throws IOException, XmlPullParserException, InterruptedException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
         final var file = new File("export.svg");
@@ -41,7 +42,7 @@ public class Tests {
 
     @Test
     @DisplayName("Get Artifact + Read All Resources")
-    public void testReadResources() throws IOException {
+    public void testReadResources() throws IOException, XmlPullParserException, InterruptedException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
         for (final var entry : root.entries())
@@ -51,7 +52,8 @@ public class Tests {
 
     @Test
     @DisplayName("Get Artifact + Read All Resources + Get Stream For Entry")
-    public void testGetEntryStream() throws MalformedURLException, IOException {
+    public void testGetEntryStream()
+            throws MalformedURLException, IOException, XmlPullParserException, InterruptedException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
         for (final var entry : root.entries())

@@ -67,6 +67,9 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             final String version)
             throws IOException {
 
+        MvnTools.getLogger().info(() -> "getArtifact(\"%s\", \"%s\", \"%s\", \"%s\")"
+                .formatted(groupId, artifactId, packaging, version));
+
         final var id = groupId + ':' + artifactId + ':' + version;
         if (ARTIFACTS.containsKey(id))
             return ARTIFACTS.get(id);

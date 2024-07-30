@@ -15,6 +15,10 @@ public class Tests {
 
     public static final String ID = "org.apache.maven:maven-core:3.9.8";
 
+    public static void main(String[] args) throws IOException, XmlPullParserException, InterruptedException {
+        new Tests().testDumpTree();
+    }
+
     @Test
     @DisplayName("Get Artifact")
     public void testGetArtifact() throws IOException, XmlPullParserException, InterruptedException {
@@ -27,7 +31,7 @@ public class Tests {
     public void testDumpTree() throws IOException, XmlPullParserException, InterruptedException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
-        System.out.println(root.toTree());
+        MvnTools.getLogger().info(() -> "%n%s".formatted(root.toTree()));
     }
 
     @Test

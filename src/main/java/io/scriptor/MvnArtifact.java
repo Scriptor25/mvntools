@@ -32,6 +32,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      */
     private static final Map<String, MvnArtifact> ARTIFACTS = new HashMap<>();
 
+    // Tree chars
+    private static final char VERTICAL = 0xB3;
+    private static final char UP_RIGHT = 0xC0;
+    private static final char T_RIGHT = 0xC3;
+    private static final char HORIZONTAL = 0xC4;
+
     /**
      * Get or materialize an artifact by id.
      * 
@@ -473,12 +479,16 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param last    if this artifact is the last dependency of the previous
      */
     private void toTree(final StringBuilder builder, final int depth, final List<Boolean> wasLast, final boolean last) {
-        String spaces = "";
         for (int i = 1; i < depth; ++i)
-            spaces += wasLast.get(i - 1) ? "   " : "|  ";
-        spaces += last ? "\\- " : "+- ";
+            builder.append(wasLast.get(i - 1) ? ' ' : VERTICAL).append("  ");
+        builder
+                .append(last ? UP_RIGHT : T_RIGHT)
+                .append(HORIZONTAL)
+                .append(' ')
+                .append(getId())
+                .append('\n');
+
         wasLast.add(last);
-        builder.append(spaces).append(getId()).append('\n');
         for (int i = 0; i < mDependencies.length; ++i)
             mDependencies[i].toTree(builder, depth + 1, wasLast, i == mDependencies.length - 1);
         wasLast.remove(depth - 1);

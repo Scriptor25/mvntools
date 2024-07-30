@@ -3,6 +3,7 @@ package io.scriptor;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.Date;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
@@ -32,6 +33,11 @@ public class MvnTools {
                 return "[%s][%s]%n%s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
             }
         });
+
+        try {
+            handler.setEncoding("UTF-8");
+        } catch (UnsupportedEncodingException e) {
+        }
 
         logger.setUseParentHandlers(false);
         logger.addHandler(handler);

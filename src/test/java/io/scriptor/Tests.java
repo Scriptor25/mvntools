@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 public class Tests {
 
-    public static final String ID = "de.auctores.dev:patchmgr:0.0.1-SNAPSHOT";
+    public static final String ID = "io.scriptor:mvntools:1.0.0";
 
     @Test
     @DisplayName("Get Artifact")
@@ -26,7 +26,7 @@ public class Tests {
     public void testDumpTree() throws IOException {
         final var root = MvnArtifact.getArtifact(ID);
         assertNotNull(root);
-        root.dumpTree();
+        System.out.println(root.toTree());
     }
 
     @Test

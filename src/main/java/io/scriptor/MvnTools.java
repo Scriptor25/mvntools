@@ -3,6 +3,11 @@ package io.scriptor;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.Date;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Formatter;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
@@ -16,7 +21,24 @@ import guru.nidi.graphviz.engine.Graphviz;
  */
 public class MvnTools {
 
-    private MvnTools() {
+    private static final Logger logger = Logger.getLogger("io.scriptor");
+
+    static {
+        final var handler = new ConsoleHandler();
+        handler.setFormatter(new Formatter() {
+
+            @Override
+            public String format(final LogRecord rec) {
+                return "[%s][%s] %s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
+            }
+        });
+
+        logger.setUseParentHandlers(false);
+        logger.addHandler(handler);
+    }
+
+    public static Logger getLogger() {
+        return logger;
     }
 
     /**
@@ -57,5 +79,8 @@ public class MvnTools {
         Graphviz.fromGraph(artifact.generateGraph())
                 .render(Format.SVG)
                 .toFile(file);
+    }
+
+    private MvnTools() {
     }
 }

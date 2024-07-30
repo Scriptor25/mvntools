@@ -74,14 +74,16 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         MvnArtifact artifact = null;
         try {
             artifact = new MvnArtifact(groupId, artifactId, packaging, version);
-        } catch (XmlPullParserException e) {
-            System.err.printf(
-                    "Failed to materialize '%s:%s:%s:%s': %s%n",
-                    groupId,
-                    artifactId,
-                    packaging,
-                    version,
-                    e.getMessage());
+        } catch (final XmlPullParserException e) {
+            MvnTools
+                    .getLogger()
+                    .warning(() -> "Failed to materialize '%s:%s:%s:%s': %s"
+                            .formatted(
+                                    groupId,
+                                    artifactId,
+                                    packaging,
+                                    version,
+                                    e.getMessage()));
         }
 
         ARTIFACTS.put(id, artifact);
@@ -111,15 +113,15 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         try {
             Runtime.getRuntime().exec("mvn", null, dir).waitFor();
             mode = 1;
-        } catch (IOException e1) {
+        } catch (final IOException e1) {
             try {
                 Runtime.getRuntime().exec("mvn.cmd", null, dir).waitFor();
                 mode = 2;
-            } catch (IOException e2) {
+            } catch (final IOException e2) {
                 throw e2;
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
             }
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
         }
 
         final String exec;
@@ -160,7 +162,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                                 version,
                                 code));
             }
-        } catch (InterruptedException e) {
+        } catch (final InterruptedException e) {
             throw new RuntimeException(e);
         }
     }
@@ -447,31 +449,36 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     }
 
     /**
-     * Dump a pretty formatted dependency tree, starting from this artifact.
+     * Create a pretty formatted string of the dependency tree, starting from this
+     * artifact.
      */
-    public void dumpTree() {
-        System.out.println(getId());
+    public String toTree() {
+        final var builder = new StringBuilder();
+        builder.append(getId()).append('\n');
         for (int i = 0; i < mDependencies.length; ++i)
-            mDependencies[i].dumpTree(1, new Vector<>(), i == mDependencies.length - 1);
+            mDependencies[i].toTree(builder, 1, new Vector<>(), i == mDependencies.length - 1);
+        return builder.toString();
     }
 
     /**
-     * Dump a pretty formatted dependency tree, starting from this artifact.
+     * Create a pretty formatted string of the dependency tree, starting from this
+     * artifact.
      * 
+     * @param builder the string builder to put the tree into
      * @param depth   the depth
      * @param wasLast a list of all previous depths, if they were the last
      *                dependency
      * @param last    if this artifact is the last dependency of the previous
      */
-    private void dumpTree(final int depth, final List<Boolean> wasLast, final boolean last) {
+    private void toTree(final StringBuilder builder, final int depth, final List<Boolean> wasLast, final boolean last) {
         String spaces = "";
         for (int i = 1; i < depth; ++i)
             spaces += wasLast.get(i - 1) ? "   " : "|  ";
         spaces += last ? "\\- " : "+- ";
         wasLast.add(last);
-        System.out.printf("%s%s%n", spaces, getId());
+        builder.append(spaces).append(getId()).append('\n');
         for (int i = 0; i < mDependencies.length; ++i)
-            mDependencies[i].dumpTree(depth + 1, wasLast, i == mDependencies.length - 1);
+            mDependencies[i].toTree(builder, depth + 1, wasLast, i == mDependencies.length - 1);
         wasLast.remove(depth - 1);
     }
 

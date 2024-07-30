@@ -3,7 +3,6 @@ package io.scriptor;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.Date;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;

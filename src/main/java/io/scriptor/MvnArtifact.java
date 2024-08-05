@@ -40,10 +40,10 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     private static final Map<String, MvnArtifact> artifacts = new HashMap<>();
 
     // Tree chars
-    private static final char VERTICAL = 0xB3;
-    private static final char UP_RIGHT = 0xC0;
-    private static final char T_RIGHT = 0xC3;
-    private static final char HORIZONTAL = 0xC4;
+    private static final char VERTICAL = '|';
+    private static final char UP_RIGHT = '\\';
+    private static final char T_RIGHT = '+';
+    private static final char HORIZONTAL = '-';
 
     private static final String ID_FORMAT = "%s:%s:%s:%s";
     private static final String JAR = "jar";
@@ -250,6 +250,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         return getArtifact(depGroupId, depArtifactId, depPackaging, depVersion);
     }
 
+    private final boolean mComplete;
     private final String mGroupId;
     private final String mArtifactId;
     private final String mPackaging;
@@ -290,6 +291,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         // repo, then fetch it from the remote
         if (!mPom.exists() && !fetchArtifact(groupId, artifactId, packaging, version, true)) {
             MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullid));
+            mComplete = false;
             mGroupId = groupId;
             mArtifactId = artifactId;
             mPackaging = packaging;
@@ -298,6 +300,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             mDependencies = new MvnArtifact[0];
             return;
         }
+
+        mComplete = true;
 
         // parse the pom file
         final var model = MvnTools.getModel(mPom);
@@ -375,6 +379,10 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     @Nonnull
     public String toString() {
         return getId();
+    }
+
+    public boolean isComplete() {
+        return mComplete;
     }
 
     @Nonnull

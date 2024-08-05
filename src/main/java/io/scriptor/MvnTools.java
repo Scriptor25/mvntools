@@ -9,6 +9,8 @@ import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
+import javax.annotation.Nonnull;
+
 import org.apache.maven.model.Model;
 import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
@@ -28,6 +30,7 @@ public class MvnTools {
         handler.setFormatter(new Formatter() {
 
             @Override
+            @Nonnull
             public String format(final LogRecord rec) {
                 return "[%s][%s] %s%n".formatted(new Date(rec.getMillis()), rec.getLevel(), rec.getMessage());
             }
@@ -37,6 +40,7 @@ public class MvnTools {
         logger.addHandler(handler);
     }
 
+    @Nonnull
     public static Logger getLogger() {
         return logger;
     }
@@ -46,6 +50,7 @@ public class MvnTools {
      * 
      * @return File pointing to the maven repository
      */
+    @Nonnull
     public static File getRepository() {
         final var home = System.getProperty("user.home");
         return new File(home, ".m2" + File.separator + "repository");
@@ -56,16 +61,14 @@ public class MvnTools {
      * 
      * @param pom the pom file
      * @return Model containing the read-in pom
-     * @throws IOException if the file does not exist, is a directory
-     *                     rather than a regular file, or for some other
-     *                     reason cannot be opened for reading.
      */
-    public static Model getModel(final File pom) throws IOException {
+    @Nonnull
+    public static Model getModel(@Nonnull final File pom) {
         final var reader = new MavenXpp3Reader();
         reader.setAddDefaultEntities(true);
         try {
             return reader.read(new FileReader(pom));
-        } catch (final XmlPullParserException e) {
+        } catch (final XmlPullParserException | IOException e) {
             getLogger().warning(() -> "Failed to get model for %s: %s".formatted(pom, e));
             return new Model();
         }
@@ -79,7 +82,7 @@ public class MvnTools {
      * @param file     the output file
      * @throws IOException if any
      */
-    public static void renderGraph(final MvnArtifact artifact, final File file) throws IOException {
+    public static void renderGraph(@Nonnull final MvnArtifact artifact, @Nonnull final File file) throws IOException {
         Graphviz.fromGraph(artifact.generateGraph())
                 .render(Format.SVG)
                 .toFile(file);

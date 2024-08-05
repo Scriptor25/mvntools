@@ -4,20 +4,27 @@ import static guru.nidi.graphviz.model.Factory.graph;
 import static guru.nidi.graphviz.model.Factory.node;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Vector;
+import java.util.function.Supplier;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Stream;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import org.apache.maven.model.Dependency;
 
 import guru.nidi.graphviz.model.Graph;
 
@@ -30,7 +37,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * Cache for previously materialized artifacts, indexed by id
      * (groupId:artifactId:packaging:version)
      */
-    private static final Map<String, MvnArtifact> ARTIFACTS = new HashMap<>();
+    private static final Map<String, MvnArtifact> artifacts = new HashMap<>();
 
     // Tree chars
     private static final char VERTICAL = 0xB3;
@@ -38,20 +45,24 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     private static final char T_RIGHT = 0xC3;
     private static final char HORIZONTAL = 0xC4;
 
+    private static final String ID_FORMAT = "%s:%s:%s:%s";
+    private static final String JAR = "jar";
+    private static final String COMPILE = "compile";
+    private static final String FALSE = "false";
+
     /**
      * Get or materialize an artifact by id.
      * 
      * @param id the artifact id (groupId:artifactId:packaging:version)
-     * @return materialized artifact, or null if materialization fails
-     * @throws InterruptedException if any
-     * @throws IOException          if any
+     * @return materialized artifact
      */
-    public static MvnArtifact getArtifact(final String id) throws InterruptedException, IOException {
+    @Nonnull
+    public static MvnArtifact getArtifact(@Nonnull final String id) {
         final var params = id.split(":");
         return getArtifact(
                 params[0],
                 params[1],
-                params.length == 3 ? "jar" : params[2],
+                params.length == 3 ? JAR : params[2],
                 params.length == 3 ? params[2] : params[3]);
     }
 
@@ -62,28 +73,26 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param artifactId the artifactId
      * @param packaging  the packaging
      * @param version    the version
-     * @return materialized artifact, or null if materialization fails
-     * @throws InterruptedException if any
-     * @throws IOException          if any
+     * @return materialized artifact
      */
+    @Nonnull
     public static MvnArtifact getArtifact(
-            final String groupId,
-            final String artifactId,
-            final String packaging,
-            final String version)
-            throws InterruptedException, IOException {
+            @Nonnull final String groupId,
+            @Nonnull final String artifactId,
+            @Nonnull final String packaging,
+            @Nonnull final String version) {
 
-        final var fullid = "%s:%s:%s:%s".formatted(groupId, artifactId, packaging, version);
+        final var fullid = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
         MvnTools.getLogger().info(() -> "Get artifact %s".formatted(fullid));
 
         final var id = groupId + ':' + artifactId + ':' + version;
-        if (ARTIFACTS.containsKey(id))
-            return ARTIFACTS.get(id);
+        if (artifacts.containsKey(id))
+            return artifacts.get(id);
 
         MvnTools.getLogger().info(() -> "Materializing artifact");
 
         final var artifact = new MvnArtifact(groupId, artifactId, packaging, version);
-        ARTIFACTS.put(id, artifact);
+        artifacts.put(id, artifact);
         return artifact;
     }
 
@@ -95,47 +104,37 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param packaging  the packaging
      * @param version    the version
      * @param transitive if not only the artifacts pom is required
-     * @throws IOException          if any
-     * @throws InterruptedException if any
      */
-    public static void fetchArtifact(
-            final String groupId,
-            final String artifactId,
-            final String packaging,
-            final String version,
-            final boolean transitive)
-            throws IOException, InterruptedException {
+    public static boolean fetchArtifact(
+            @Nonnull final String groupId,
+            @Nonnull final String artifactId,
+            @Nonnull final String packaging,
+            @Nonnull final String version,
+            final boolean transitive) {
 
-        final var fullid = "%s:%s:%s:%s".formatted(groupId, artifactId, packaging, version);
+        final var fullid = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
         MvnTools.getLogger().info(() -> "Fetching artifact %s".formatted(fullid));
 
-        final var dir = new File(".");
+        final var cwd = new File(".");
 
-        int mode = 0;
+        String exec;
         try {
-            Runtime.getRuntime().exec("mvn", null, dir).waitFor();
-            mode = 1;
-        } catch (IOException | InterruptedException a) {
+            Runtime.getRuntime().exec("mvn", null, cwd).waitFor();
+            exec = "mvn";
+        } catch (final IOException a) {
             try {
-                Runtime.getRuntime().exec("mvn.cmd", null, dir).waitFor();
-                mode = 2;
-            } catch (IOException | InterruptedException b) {
-            }
-        }
-
-        final String exec;
-        switch (mode) {
-            case 1: // mvn executable
-                exec = "mvn";
-                break;
-
-            case 2: // mvn.cmd executable
+                Runtime.getRuntime().exec("mvn.cmd", null, cwd).waitFor();
                 exec = "mvn.cmd";
-                break;
-
-            default: // no executable
-                MvnTools.getLogger().warning("No suitable maven executable found");
-                return;
+            } catch (final IOException b) {
+                MvnTools.getLogger().warning("no suitable maven executable found");
+                return false;
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         }
 
         final var procBuilder = new ProcessBuilder(
@@ -147,11 +146,47 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 "-Dversion=" + version,
                 "-Dtransitive=" + transitive)
                 .inheritIO()
-                .directory(dir);
-        final var proc = procBuilder.start();
-        final var code = proc.waitFor();
-        if (code != 0)
+                .directory(cwd);
+
+        final int code;
+        try {
+            code = procBuilder.start().waitFor();
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (final IOException e) {
+            MvnTools.getLogger().warning(e::getMessage);
+            return false;
+        }
+
+        if (code != 0) {
             MvnTools.getLogger().warning(() -> "Failed to fetch artifact %s: Exit code %d".formatted(fullid, code));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get a property from a map of strings indexed by strings, but only if the key
+     * is in format "${...}".
+     * This also works recursively.
+     * 
+     * @param properties the properties
+     * @param key        the key
+     * @param fallback   supplier for a fallback value
+     * @return the value of the property or key if it is not a property
+     */
+    @Nonnull
+    private static String getProperty(
+            @Nonnull final Map<String, String> properties,
+            @Nonnull String key,
+            @Nonnull final Supplier<String> fallback) {
+        while (key != null && key.startsWith("${") && key.endsWith("}"))
+            key = properties.getOrDefault(key.substring(2, key.length() - 1), null);
+        if (key != null)
+            return key;
+        return fallback.get();
     }
 
     /**
@@ -163,10 +198,56 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param key        the key
      * @return the value of the property or key if it is not a property
      */
-    private static String getProperty(final Map<String, String> properties, String key) {
-        while (key != null && key.startsWith("${") && key.endsWith("}"))
-            key = properties.getOrDefault(key.substring(2, key.length() - 1), null);
-        return key;
+    @Nonnull
+    private static String getProperty(
+            @Nonnull final Map<String, String> properties,
+            @Nonnull String key) {
+        return getProperty(properties, key, () -> "");
+    }
+
+    /**
+     * Resolve the dependency
+     * 
+     * @param props the properties
+     * @param dep   the dependency model
+     * @return the materialized dependency artifact, or null if optional or not
+     *         compile scope
+     */
+    @Nullable
+    private static MvnArtifact resolveDependency(
+            @Nonnull final Map<String, String> props,
+            @Nonnull final Dependency dep) {
+        final var depGroupId = getProperty(
+                props,
+                dep.getGroupId(),
+                () -> "");
+        final var depArtifactId = getProperty(
+                props,
+                dep.getArtifactId(),
+                () -> "");
+        final var id = depGroupId + '$' + depArtifactId;
+        final var depPackaging = getProperty(
+                props,
+                dep.getType(),
+                () -> props.getOrDefault(id + ".packaging", JAR));
+        final var depVersion = getProperty(
+                props,
+                dep.getVersion(),
+                () -> props.get(id + ".version"));
+        final var depScope = getProperty(
+                props,
+                dep.getScope(),
+                () -> props.getOrDefault(id + ".scope", COMPILE));
+        final var depOptional = getProperty(
+                props,
+                dep.getOptional(),
+                () -> props.getOrDefault(id + ".optional", FALSE));
+
+        final var isOptional = Boolean.parseBoolean(depOptional);
+        if (isOptional || !COMPILE.equals(depScope))
+            return null;
+
+        return getArtifact(depGroupId, depArtifactId, depPackaging, depVersion);
     }
 
     private final String mGroupId;
@@ -186,23 +267,20 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param artifactId the artifactId
      * @param packaging  the packaging
      * @param version    the version
-     * @throws InterruptedException if any
-     * @throws IOException          if any
      */
     private MvnArtifact(
-            final String groupId,
-            final String artifactId,
-            final String packaging,
-            final String version)
-            throws InterruptedException, IOException {
+            @Nonnull final String groupId,
+            @Nonnull final String artifactId,
+            @Nonnull final String packaging,
+            @Nonnull final String version) {
 
-        final var fullid = "%s:%s:%s:%s".formatted(groupId, artifactId, packaging, version);
+        final var fullid = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
 
         // generate a prefix for the artifact for later use
         mPrefix = String.format(
                 "%2$s%1$s%3$s%1$s%4$s%1$s%3$s-%4$s",
                 File.separator,
-                groupId.replaceAll("\\.", "/"),
+                groupId.replace('.', '/'),
                 artifactId,
                 version);
 
@@ -210,28 +288,25 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         // if the pom file does not exist, i.e. the artifact is not yet in the local
         // repo, then fetch it from the remote
-        if (!mPom.exists()) {
-            fetchArtifact(groupId, artifactId, packaging, version, true);
-            if (!mPom.exists()) {
-                MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullid));
-                mGroupId = groupId;
-                mArtifactId = artifactId;
-                mPackaging = packaging;
-                mVersion = version;
-                mParent = null;
-                mDependencies = new MvnArtifact[0];
-                return;
-            }
+        if (!mPom.exists() && !fetchArtifact(groupId, artifactId, packaging, version, true)) {
+            MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullid));
+            mGroupId = groupId;
+            mArtifactId = artifactId;
+            mPackaging = packaging;
+            mVersion = version;
+            mParent = null;
+            mDependencies = new MvnArtifact[0];
+            return;
         }
 
         // parse the pom file
         final var model = MvnTools.getModel(mPom);
 
-        // preprocess the parent artifact, if it has one
-        if (model.getParent() != null) {
-            mParent = getArtifact(model.getParent().getId());
-            if (mParent != null)
-                mProperties.putAll(mParent.mProperties);
+        // preprocess the parent artifact, if exists
+        final var modelParent = model.getParent();
+        if (modelParent != null) {
+            mParent = getArtifact(modelParent.getId());
+            mProperties.putAll(mParent.mProperties);
         } else {
             mParent = null;
         }
@@ -239,19 +314,24 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         // copy the properties from the model into the artifacts properties
         model.getProperties().forEach((key, value) -> mProperties.put((String) key, (String) value));
 
-        // check for inherited groupid and version
-        mGroupId = model.getGroupId() == null
-                ? model.getParent() != null
-                        ? model.getParent().getGroupId()
-                        : null
-                : model.getGroupId();
+        // set artifactid and packaging (those must be provided by the model)
         mArtifactId = model.getArtifactId();
         mPackaging = model.getPackaging();
-        mVersion = model.getVersion() == null
-                ? model.getParent() != null
-                        ? model.getParent().getVersion()
-                        : null
-                : model.getVersion();
+
+        // check for inherited groupid and version
+        final var subGroupId = modelParent != null
+                ? modelParent.getGroupId()
+                : null;
+        mGroupId = model.getGroupId() != null
+                ? model.getGroupId()
+                : subGroupId;
+
+        final var subVersion = modelParent != null
+                ? modelParent.getVersion()
+                : null;
+        mVersion = model.getVersion() != null
+                ? model.getVersion()
+                : subVersion;
 
         // define default properties that MUST be provided for the system to work 100%
         // (or at least 99.999%)
@@ -261,110 +341,89 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         // set versions and other properties from the dependency management part of the
         // model
-        if (model.getDependencyManagement() != null) {
-            for (final var dependency : model.getDependencyManagement().getDependencies()) {
+        if (model.getDependencyManagement() != null)
+            model.getDependencyManagement().getDependencies().forEach(dependency -> {
                 final var depGroupId = getProperty(mProperties, dependency.getGroupId());
                 final var depArtifactId = getProperty(mProperties, dependency.getArtifactId());
-                final var depType = getProperty(mProperties, dependency.getType());
+                final var depPackaging = getProperty(mProperties, dependency.getType(), () -> JAR);
                 final var depVersion = getProperty(mProperties, dependency.getVersion());
-                final var depScope = getProperty(mProperties, dependency.getScope());
-                final var depOptional = getProperty(mProperties, dependency.getOptional());
+                final var depScope = getProperty(mProperties, dependency.getScope(), () -> COMPILE);
+                final var depOptional = getProperty(mProperties, dependency.getOptional(), () -> FALSE);
 
                 if ("import".equals(depScope)) {
-                    final var imported = getArtifact(depGroupId, depArtifactId, depType, depVersion);
-                    if (imported != null)
-                        mProperties.putAll(imported.mProperties);
-                    continue;
+                    final var imported = getArtifact(depGroupId, depArtifactId, depPackaging, depVersion);
+                    mProperties.putAll(imported.mProperties);
+                    return;
                 }
 
                 final var id = depGroupId + '$' + depArtifactId;
-                mProperties.put(id + ".type", depType);
+                mProperties.put(id + ".packaging", depPackaging);
                 mProperties.put(id + ".version", depVersion);
                 mProperties.put(id + ".scope", depScope);
                 mProperties.put(id + ".optional", depOptional);
-            }
-        }
+            });
 
         // retrieve all dependencies
-        final List<MvnArtifact> dependencies = new Vector<>();
-        for (final var dependency : model.getDependencies()) {
-            final var depGroupId = getProperty(mProperties, dependency.getGroupId());
-            final var depArtifactId = getProperty(mProperties, dependency.getArtifactId());
-            final var id = depGroupId + '$' + depArtifactId;
-            var depType = getProperty(mProperties, dependency.getType());
-            var depVersion = getProperty(mProperties, dependency.getVersion());
-            var depScope = getProperty(mProperties, dependency.getScope());
-            var depOptional = getProperty(mProperties, dependency.getOptional());
-
-            if (depType == null)
-                depType = mProperties.get(id + ".type");
-            if (depVersion == null)
-                depVersion = mProperties.get(id + ".version");
-            if (depScope == null)
-                depScope = mProperties.get(id + ".scope");
-            if (depOptional == null)
-                depOptional = mProperties.get(id + ".optional");
-
-            final var isOptional = depOptional == null ? false : Boolean.parseBoolean(depOptional);
-
-            if (isOptional || (depScope != null && !"compile".equals(depScope)))
-                continue;
-
-            final var artifact = getArtifact(
-                    depGroupId,
-                    depArtifactId,
-                    depType,
-                    depVersion);
-            if (artifact != null && !dependencies.contains(artifact))
-                dependencies.add(artifact);
-        }
-
-        // make the dependencies list an array
-        mDependencies = dependencies.toArray(MvnArtifact[]::new);
+        mDependencies = model.getDependencies()
+                .stream()
+                .map(dep -> resolveDependency(mProperties, dep))
+                .filter(Objects::nonNull)
+                .toArray(MvnArtifact[]::new);
     }
 
     @Override
+    @Nonnull
     public String toString() {
         return getId();
     }
 
+    @Nonnull
     public String getGroupId() {
         return mGroupId;
     }
 
+    @Nonnull
     public String getArtifactId() {
         return mArtifactId;
     }
 
+    @Nonnull
     public String getPackaging() {
         return mPackaging;
     }
 
+    @Nonnull
     public String getVersion() {
         return mVersion;
     }
 
+    @Nonnull
     public String getId() {
         // e.g. io.scriptor:mvntools:jar:1.0.0
         return mGroupId + ':' + mArtifactId + ':' + mPackaging + ':' + mVersion;
     }
 
+    @Nonnull
     public String getPrefix() {
         return mPrefix;
     }
 
+    @Nonnull
     public File getPom() {
         return mPom;
     }
 
+    @Nonnull
     public File getPackageFile() {
-        return new File(MvnTools.getRepository(), mPrefix + "." + mPackaging);
+        return new File(MvnTools.getRepository(), mPrefix + '.' + mPackaging);
     }
 
+    @Nullable
     public MvnArtifact getParent() {
         return mParent;
     }
 
+    @Nonnull
     public MvnArtifact[] getDependencies() {
         return mDependencies;
     }
@@ -372,19 +431,22 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     /**
      * Open the artifacts jar.
      * 
-     * @return the jarfile or null if the dependency is not a jar
-     * @throws IOException          if any
-     * @throws InterruptedException if any
+     * @return the jarfile
+     * @throws IOException if any
      */
-    public JarFile openPackage() throws IOException, InterruptedException {
+    @Nonnull
+    public JarFile openPackage() throws IOException {
         // only jar and war files can be unpacked using the java jar api
-        if (!(mPackaging.equals("jar") || mPackaging.equals("war")))
-            return null;
+        if (!(mPackaging.equals(JAR) || mPackaging.equals("war")))
+            throw new IOException("'" + mPackaging + "' is not a jar package type");
 
         // if the jar/war does not exist yet, maybe because maven is lazy, fetch it
         final var file = getPackageFile();
         if (!file.exists())
             fetchArtifact(mGroupId, mArtifactId, mPackaging, mVersion, false);
+
+        if (!file.exists())
+            throw new FileNotFoundException(file.toString());
 
         return new JarFile(file);
     }
@@ -394,30 +456,17 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @return the iterable
      */
+    @Nonnull
     public Iterable<JarEntry> entries() {
         return () -> {
-            JarFile pkg = null;
+            final JarFile pkg;
             try {
                 pkg = openPackage();
-            } catch (final IOException | InterruptedException e) {
+            } catch (final IOException e) {
+                MvnTools.getLogger().warning(e::getMessage);
+                return Collections.emptyIterator();
             }
-            if (pkg != null)
-                return pkg.entries().asIterator();
-
-            // there unfortunatly is no empty iterator (or so do i think)
-            return new Iterator<JarEntry>() {
-
-                @Override
-                public boolean hasNext() {
-                    return false;
-                }
-
-                @Override
-                public JarEntry next() {
-                    throw new NoSuchElementException();
-                }
-
-            };
+            return pkg.entries().asIterator();
         };
     }
 
@@ -425,17 +474,17 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * Open a stream over the elements inside the artifacts package.
      * 
      * @return the stream
-     * @throws IOException          if any
-     * @throws InterruptedException if any
      */
-    public Stream<JarEntry> stream() throws IOException, InterruptedException {
-        final var pkg = openPackage();
-        if (pkg != null)
-            return pkg.stream();
-
-        // why is there an empty stream but no empty iterator?! (see the one method
-        // above)
-        return Stream.empty();
+    @Nonnull
+    public Stream<JarEntry> stream() {
+        final JarFile pkg;
+        try {
+            pkg = openPackage();
+        } catch (final IOException e) {
+            MvnTools.getLogger().warning(e::getMessage);
+            return Stream.empty();
+        }
+        return pkg.stream();
     }
 
     /**
@@ -444,15 +493,15 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @param entry the jar entry
      * @return an input stream to the entry
-     * @throws MalformedURLException if any
-     * @throws IOException           if any
+     * @throws IOException if any
      */
-    public InputStream openEntry(final JarEntry entry) throws MalformedURLException, IOException {
+    @Nonnull
+    public InputStream openEntry(@Nonnull final JarEntry entry) throws IOException {
         final var pkgFile = getPackageFile();
         final var name = entry.getName();
 
         // jar url, e.g. jar:file:/path/to/my/jar/myjar.jar!/my/entry/name
-        final var url = new URL("jar:file:" + pkgFile.getCanonicalPath().replaceAll("\\\\", "/") + "!/" + name);
+        final var url = new URL("jar:file:" + pkgFile.getCanonicalPath().replace('\\', '/') + "!/" + name);
         return url.openStream();
     }
 
@@ -460,6 +509,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * Create a pretty formatted string of the dependency tree, starting from this
      * artifact.
      */
+    @Nonnull
     public String toTree() {
         final var builder = new StringBuilder();
         builder.append(getId()).append('\n');
@@ -478,9 +528,15 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      *                dependency
      * @param last    if this artifact is the last dependency of the previous
      */
-    private void toTree(final StringBuilder builder, final int depth, final List<Boolean> wasLast, final boolean last) {
+    private void toTree(
+            @Nonnull final StringBuilder builder,
+            final int depth,
+            @Nonnull final List<Boolean> wasLast,
+            final boolean last) {
         for (int i = 1; i < depth; ++i)
-            builder.append(wasLast.get(i - 1) ? ' ' : VERTICAL).append("  ");
+            builder
+                    .append(Boolean.TRUE.equals(wasLast.get(i - 1)) ? ' ' : VERTICAL)
+                    .append("  ");
         builder
                 .append(last ? UP_RIGHT : T_RIGHT)
                 .append(HORIZONTAL)
@@ -499,6 +555,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * 
      * @return a graphviz graph
      */
+    @Nonnull
     public Graph generateGraph() {
         return generateGraph(graph().directed());
     }
@@ -509,38 +566,21 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param graph the graph
      * @return graph
      */
+    @Nonnull
     private Graph generateGraph(Graph graph) {
         graph = graph.with(
                 node(getId()).link(
-                        (String[]) Arrays.stream(mDependencies)
-                                .map(dep -> dep.getId())
-                                .toArray(size -> new String[size])));
+                        Arrays.stream(mDependencies)
+                                .map(MvnArtifact::getId)
+                                .toArray(String[]::new)));
         for (final var dep : mDependencies)
             graph = dep.generateGraph(graph);
         return graph;
     }
 
     @Override
+    @Nonnull
     public Iterator<MvnArtifact> iterator() {
-        return new Iterator<MvnArtifact>() {
-
-            private int i = 0;
-
-            @Override
-            public boolean hasNext() {
-                return i < mDependencies.length;
-            }
-
-            @Override
-            public MvnArtifact next() {
-                if (!hasNext())
-                    throw new NoSuchElementException(
-                            String.format(
-                                    "Index %d out of range [0;%d[",
-                                    i,
-                                    mDependencies.length));
-                return mDependencies[i++];
-            }
-        };
+        return Arrays.stream(mDependencies).iterator();
     }
 }

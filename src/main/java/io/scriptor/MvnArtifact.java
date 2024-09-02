@@ -145,7 +145,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 "-Dpackaging=" + packaging,
                 "-Dversion=" + version,
                 "-Dtransitive=" + transitive)
-                .inheritIO()
+                // .inheritIO()
                 .directory(cwd);
 
         final int code;

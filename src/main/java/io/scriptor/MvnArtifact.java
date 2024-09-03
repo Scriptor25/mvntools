@@ -289,7 +289,9 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         // if the pom file does not exist, i.e. the artifact is not yet in the local
         // repo, then fetch it from the remote
-        if (!mPom.exists() && !fetchArtifact(groupId, artifactId, packaging, version, true)) {
+        if (!mPom.exists()
+                && (new File(mPom.getPath() + ".lastUpdated").exists()
+                        || !fetchArtifact(groupId, artifactId, packaging, version, true))) {
             MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullid));
             mComplete = false;
             mGroupId = groupId;

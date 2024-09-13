@@ -1,32 +1,23 @@
 package io.scriptor;
 
-import static guru.nidi.graphviz.model.Factory.graph;
-import static guru.nidi.graphviz.model.Factory.node;
+import guru.nidi.graphviz.model.Graph;
+import org.apache.maven.model.Dependency;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Vector;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
-import org.apache.maven.model.Dependency;
-
-import guru.nidi.graphviz.model.Graph;
+import static guru.nidi.graphviz.model.Factory.graph;
+import static guru.nidi.graphviz.model.Factory.node;
 
 /**
  * Representation of a maven artifact
@@ -52,23 +43,35 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Get or materialize an artifact by id.
-     * 
+     *
      * @param id the artifact id (groupId:artifactId:packaging:version)
      * @return materialized artifact
      */
     @Nonnull
     public static MvnArtifact getArtifact(@Nonnull final String id) {
         final var params = id.split(":");
-        return getArtifact(
-                params[0],
-                params[1],
-                params.length == 3 ? JAR : params[2],
-                params.length == 3 ? params[2] : params[3]);
+        final var groupId = params[0];
+        final var artifactId = params[1];
+        final String packaging;
+        final String version;
+        if (params.length == 3) {
+            packaging = JAR;
+            version = params[2];
+        } else if (params.length == 4) {
+            packaging = params[2];
+            version = params[3];
+        } else {
+            MvnTools.getLogger().warning(() -> "Invalid artifact id '%s': missing version or too many parts".formatted(id));
+            MvnTools.getLogger().warning(() -> "This causes the maven artifact to use the RELEASE meta version");
+            packaging = JAR;
+            version = "RELEASE";
+        }
+        return getArtifact(groupId, artifactId, packaging, version);
     }
 
     /**
      * Get or materialize an artifact by id.
-     * 
+     *
      * @param groupId    the groupId
      * @param artifactId the artifactId
      * @param packaging  the packaging
@@ -82,8 +85,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             @Nonnull final String packaging,
             @Nonnull final String version) {
 
-        final var fullid = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
-        MvnTools.getLogger().info(() -> "Get artifact %s".formatted(fullid));
+        final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
+        MvnTools.getLogger().info(() -> "Get artifact %s".formatted(fullId));
 
         final var id = groupId + ':' + artifactId + ':' + version;
         if (artifacts.containsKey(id))
@@ -98,7 +101,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Fetch a remote maven artifact into the local repository.
-     * 
+     *
      * @param groupId    the groupId
      * @param artifactId the artifactId
      * @param packaging  the packaging
@@ -112,8 +115,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             @Nonnull final String version,
             final boolean transitive) {
 
-        final var fullid = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
-        MvnTools.getLogger().info(() -> "Fetching artifact %s".formatted(fullid));
+        final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
+        MvnTools.getLogger().info(() -> "Fetching artifact %s".formatted(fullId));
 
         final var cwd = new File(".");
 
@@ -160,7 +163,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         }
 
         if (code != 0) {
-            MvnTools.getLogger().warning(() -> "Failed to fetch artifact %s: Exit code %d".formatted(fullid, code));
+            MvnTools.getLogger().warning(() -> "Failed to fetch artifact %s: Exit code %d".formatted(fullId, code));
             return false;
         }
 
@@ -171,7 +174,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * Get a property from a map of strings indexed by strings, but only if the key
      * is in format "${...}".
      * This also works recursively.
-     * 
+     *
      * @param properties the properties
      * @param key        the key
      * @param fallback   supplier for a fallback value
@@ -193,7 +196,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * Get a property from a map of strings indexed by strings, but only if the key
      * is in format "${...}".
      * This also works recursively.
-     * 
+     *
      * @param properties the properties
      * @param key        the key
      * @return the value of the property or key if it is not a property
@@ -207,11 +210,11 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Resolve the dependency
-     * 
+     *
      * @param props the properties
      * @param dep   the dependency model
      * @return the materialized dependency artifact, or null if optional or not
-     *         compile scope
+     * compile scope
      */
     @Nullable
     private static MvnArtifact resolveDependency(
@@ -263,7 +266,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Materialize a new artifact.
-     * 
+     *
      * @param groupId    the groupId
      * @param artifactId the artifactId
      * @param packaging  the packaging
@@ -275,7 +278,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             @Nonnull final String packaging,
             @Nonnull final String version) {
 
-        final var fullid = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
+        final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
 
         // generate a prefix for the artifact for later use
         mPrefix = String.format(
@@ -291,8 +294,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         // repo, then fetch it from the remote
         if (!mPom.exists()
                 && (new File(mPom.getPath() + ".lastUpdated").exists()
-                        || !fetchArtifact(groupId, artifactId, packaging, version, true))) {
-            MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullid));
+                || !fetchArtifact(groupId, artifactId, packaging, version, true))) {
+            MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullId));
             mComplete = false;
             mGroupId = groupId;
             mArtifactId = artifactId;
@@ -440,7 +443,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Open the artifacts jar.
-     * 
+     *
      * @return the jarfile
      * @throws IOException if any
      */
@@ -463,7 +466,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Create an iterable over all elements in the artifacts package.
-     * 
+     *
      * @return the iterable
      */
     @Nonnull
@@ -482,7 +485,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Open a stream over the elements inside the artifacts package.
-     * 
+     *
      * @return the stream
      */
     @Nonnull
@@ -500,7 +503,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     /**
      * Open an input stream from a jar entry. You get one from either using stream()
      * or entries().
-     * 
+     *
      * @param entry the jar entry
      * @return an input stream to the entry
      * @throws IOException if any
@@ -531,7 +534,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     /**
      * Create a pretty formatted string of the dependency tree, starting from this
      * artifact.
-     * 
+     *
      * @param builder the string builder to put the tree into
      * @param depth   the depth
      * @param wasLast a list of all previous depths, if they were the last
@@ -562,7 +565,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Generate a graphviz graph with all dependencies, starting from this artifact.
-     * 
+     *
      * @return a graphviz graph
      */
     @Nonnull
@@ -572,7 +575,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
     /**
      * Generate a graphviz graph with all dependencies, starting from this artifact.
-     * 
+     *
      * @param graph the graph
      * @return graph
      */

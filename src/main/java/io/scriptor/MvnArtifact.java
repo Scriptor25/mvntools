@@ -61,7 +61,8 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             packaging = params[2];
             version = params[3];
         } else {
-            MvnTools.getLogger().warning(() -> "Invalid artifact id '%s': missing version or too many parts".formatted(id));
+            MvnTools.getLogger()
+                    .warning(() -> "Invalid artifact id '%s': missing version or too many parts".formatted(id));
             MvnTools.getLogger().warning(() -> "This causes the maven artifact to use the RELEASE meta version");
             packaging = JAR;
             version = "RELEASE";
@@ -148,7 +149,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 "-Dpackaging=" + packaging,
                 "-Dversion=" + version,
                 "-Dtransitive=" + transitive)
-                // .inheritIO()
+                // .inheritIO() // uncomment to get maven logging information
                 .directory(cwd);
 
         final int code;
@@ -214,10 +215,10 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param props the properties
      * @param dep   the dependency model
      * @return the materialized dependency artifact, or null if optional or not
-     * compile scope
+     *         compile scope
      */
-    @Nullable
-    private static MvnArtifact resolveDependency(
+    @Nonnull
+    private static Optional<MvnArtifact> resolveDependency(
             @Nonnull final Map<String, String> props,
             @Nonnull final Dependency dep) {
         final var depGroupId = getProperty(
@@ -248,9 +249,9 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         final var isOptional = Boolean.parseBoolean(depOptional);
         if (isOptional || !COMPILE.equals(depScope))
-            return null;
+            return Optional.empty();
 
-        return getArtifact(depGroupId, depArtifactId, depPackaging, depVersion);
+        return Optional.of(getArtifact(depGroupId, depArtifactId, depPackaging, depVersion));
     }
 
     private final boolean mComplete;
@@ -276,15 +277,43 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
             @Nonnull final String groupId,
             @Nonnull final String artifactId,
             @Nonnull final String packaging,
-            @Nonnull final String version) {
+            @Nonnull String version) {
 
-        final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
+        if (version.matches("[\\[(][a-zA-Z0-9-_.]*,[a-zA-Z0-9-_.]*[])]")) {
+            if (!fetchArtifact(groupId, artifactId, packaging, version, true)) {
+                final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
+                MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullId));
+                mComplete = false;
+                mGroupId = groupId;
+                mArtifactId = artifactId;
+                mPackaging = packaging;
+                mVersion = version;
+                mPrefix = null;
+                mPom = null;
+                mParent = null;
+                mDependencies = new MvnArtifact[0];
+                return;
+            }
+
+            final var artifactRoot = new File(
+                    MvnTools.getRepository(),
+                    groupId.replace('.', File.separatorChar) + File.separatorChar + artifactId);
+
+            final var prefix = Arrays.stream(artifactRoot.listFiles())
+                    .filter(File::isDirectory)
+                    .filter(dir -> !new File(dir, ".lastUpdated").exists())
+                    .map(File::getName)
+                    .max(String::compareTo);
+
+            if (prefix.isPresent())
+                version = prefix.get();
+        }
 
         // generate a prefix for the artifact for later use
         mPrefix = String.format(
-                "%2$s%1$s%3$s%1$s%4$s%1$s%3$s-%4$s",
-                File.separator,
-                groupId.replace('.', '/'),
+                "%2$s%1$c%3$s%1$c%4$s%1$c%3$s-%4$s",
+                File.separatorChar,
+                groupId.replace('.', File.separatorChar),
                 artifactId,
                 version);
 
@@ -292,9 +321,10 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
 
         // if the pom file does not exist, i.e. the artifact is not yet in the local
         // repo, then fetch it from the remote
-        if (!mPom.exists()
-                && (new File(mPom.getPath() + ".lastUpdated").exists()
-                || !fetchArtifact(groupId, artifactId, packaging, version, true))) {
+        if (!mPom.exists() &&
+                (new File(mPom.getPath(), ".lastUpdated").exists() ||
+                        !fetchArtifact(groupId, artifactId, packaging, version, true))) {
+            final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
             MvnTools.getLogger().warning(() -> "Generated incomplete artifact %s".formatted(fullId));
             mComplete = false;
             mGroupId = groupId;
@@ -323,11 +353,11 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         // copy the properties from the model into the artifacts properties
         model.getProperties().forEach((key, value) -> mProperties.put((String) key, (String) value));
 
-        // set artifactid and packaging (those must be provided by the model)
+        // set artifact id and packaging (those must be provided by the model)
         mArtifactId = model.getArtifactId();
         mPackaging = model.getPackaging();
 
-        // check for inherited groupid and version
+        // check for inherited group id and version
         final var subGroupId = modelParent != null
                 ? modelParent.getGroupId()
                 : null;
@@ -351,33 +381,38 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         // set versions and other properties from the dependency management part of the
         // model
         if (model.getDependencyManagement() != null)
-            model.getDependencyManagement().getDependencies().forEach(dependency -> {
-                final var depGroupId = getProperty(mProperties, dependency.getGroupId());
-                final var depArtifactId = getProperty(mProperties, dependency.getArtifactId());
-                final var depPackaging = getProperty(mProperties, dependency.getType(), () -> JAR);
-                final var depVersion = getProperty(mProperties, dependency.getVersion());
-                final var depScope = getProperty(mProperties, dependency.getScope(), () -> COMPILE);
-                final var depOptional = getProperty(mProperties, dependency.getOptional(), () -> FALSE);
-
-                if ("import".equals(depScope)) {
-                    final var imported = getArtifact(depGroupId, depArtifactId, depPackaging, depVersion);
-                    mProperties.putAll(imported.mProperties);
-                    return;
-                }
-
-                final var id = depGroupId + '$' + depArtifactId;
-                mProperties.put(id + ".packaging", depPackaging);
-                mProperties.put(id + ".version", depVersion);
-                mProperties.put(id + ".scope", depScope);
-                mProperties.put(id + ".optional", depOptional);
-            });
+            model.getDependencyManagement()
+                    .getDependencies()
+                    .forEach(this::resolveDependencyManagement);
 
         // retrieve all dependencies
         mDependencies = model.getDependencies()
                 .stream()
                 .map(dep -> resolveDependency(mProperties, dep))
-                .filter(Objects::nonNull)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .toArray(MvnArtifact[]::new);
+    }
+
+    private void resolveDependencyManagement(@Nonnull final Dependency dependency) {
+        final var depGroupId = getProperty(mProperties, dependency.getGroupId());
+        final var depArtifactId = getProperty(mProperties, dependency.getArtifactId());
+        final var depPackaging = getProperty(mProperties, dependency.getType(), () -> JAR);
+        final var depVersion = getProperty(mProperties, dependency.getVersion());
+        final var depScope = getProperty(mProperties, dependency.getScope(), () -> COMPILE);
+        final var depOptional = getProperty(mProperties, dependency.getOptional(), () -> FALSE);
+
+        if ("import".equals(depScope)) {
+            final var imported = getArtifact(depGroupId, depArtifactId, depPackaging, depVersion);
+            mProperties.putAll(imported.mProperties);
+            return;
+        }
+
+        final var id = depGroupId + '$' + depArtifactId;
+        mProperties.put(id + ".packaging", depPackaging);
+        mProperties.put(id + ".version", depVersion);
+        mProperties.put(id + ".scope", depScope);
+        mProperties.put(id + ".optional", depOptional);
     }
 
     @Override
@@ -416,12 +451,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
         return mGroupId + ':' + mArtifactId + ':' + mPackaging + ':' + mVersion;
     }
 
-    @Nonnull
+    @Nullable
     public String getPrefix() {
         return mPrefix;
     }
 
-    @Nonnull
+    @Nullable
     public File getPom() {
         return mPom;
     }
@@ -444,7 +479,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     /**
      * Open the artifacts jar.
      *
-     * @return the jarfile
+     * @return the jar file
      * @throws IOException if any
      */
     @Nonnull
@@ -472,14 +507,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     @Nonnull
     public Iterable<JarEntry> entries() {
         return () -> {
-            final JarFile pkg;
             try {
-                pkg = openPackage();
+                return openPackage().entries().asIterator();
             } catch (final IOException e) {
                 MvnTools.getLogger().warning(e::getMessage);
                 return Collections.emptyIterator();
             }
-            return pkg.entries().asIterator();
         };
     }
 
@@ -490,14 +523,12 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      */
     @Nonnull
     public Stream<JarEntry> stream() {
-        final JarFile pkg;
         try {
-            pkg = openPackage();
+            return openPackage().stream();
         } catch (final IOException e) {
             MvnTools.getLogger().warning(e::getMessage);
             return Stream.empty();
         }
-        return pkg.stream();
     }
 
     /**

@@ -24,6 +24,8 @@ import static guru.nidi.graphviz.model.Factory.node;
  */
 public class MvnArtifact implements Iterable<MvnArtifact> {
 
+    public static boolean debug = false;
+
     /**
      * Cache for previously materialized artifacts, indexed by id
      * (groupId:artifactId:packaging:version)
@@ -149,8 +151,9 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
                 "-Dpackaging=" + packaging,
                 "-Dversion=" + version,
                 "-Dtransitive=" + transitive)
-                // .inheritIO() // uncomment to get maven logging information
                 .directory(cwd);
+        if (debug)
+            procBuilder.inheritIO();
 
         final int code;
         try {

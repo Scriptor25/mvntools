@@ -7,10 +7,13 @@ import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
 import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
@@ -78,11 +81,12 @@ public class MvnTools {
      *
      * @param groupId    the group id
      * @param artifactId the artifact id
+     * @param packaging  the packaging (optional)
      * @param version    the version
      * @return Model containing the read-in pom
      */
-    @Nonnull
-    public static Model getModel(@Nonnull final String groupId, @Nonnull final String artifactId, @Nonnull final String version) {
+    @Nullable
+    public static Model getModel(@Nonnull final String groupId, @Nonnull final String artifactId, @Nullable final String packaging, @Nonnull final String version) {
         final var prefix = String.format(
                 "%2$s%1$c%3$s%1$c%4$s%1$c%3$s-%4$s",
                 File.separatorChar,
@@ -91,6 +95,8 @@ public class MvnTools {
                 version);
 
         final var pom = new File(getRepository(), prefix + ".pom");
+        if (!pom.exists() && !fetchArtifact(groupId, artifactId, packaging, version, false))
+            return null;
         return getModel(pom);
     }
 
@@ -99,14 +105,14 @@ public class MvnTools {
      *
      * @param groupId    the groupId
      * @param artifactId the artifactId
-     * @param packaging  the packaging
+     * @param packaging  the packaging (optional)
      * @param version    the version
-     * @param transitive if not only the artifacts pom is required
+     * @param transitive if the artifact AND all of its dependencies are required
      */
     public static boolean fetchArtifact(
             @Nonnull final String groupId,
             @Nonnull final String artifactId,
-            @Nonnull final String packaging,
+            @Nullable final String packaging,
             @Nonnull final String version,
             final boolean transitive) {
 
@@ -135,16 +141,19 @@ public class MvnTools {
             return false;
         }
 
-        final var procBuilder = new ProcessBuilder(
-                exec,
-                "dependency:get",
-                "-DgroupId=" + groupId,
-                "-DartifactId=" + artifactId,
-                "-Dpackaging=" + packaging,
-                "-Dversion=" + version,
-                "-Dtransitive=" + transitive)
-                .inheritIO()
-                .directory(cwd);
+        final List<String> command = new ArrayList<>();
+        command.add(exec);
+        command.add("dependency:get");
+        command.add("-DgroupId=" + groupId);
+        command.add("-DartifactId=" + artifactId);
+        if (packaging != null) command.add("-Dpackaging=" + packaging);
+        command.add("-Dversion=" + version);
+        command.add("-Dtransitive=" + transitive);
+
+        final var procBuilder = new ProcessBuilder()
+                .command(command)
+                .directory(cwd)
+                .inheritIO();
 
         final int code;
         try {

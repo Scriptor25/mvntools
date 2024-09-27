@@ -1,5 +1,12 @@
 package io.scriptor;
 
+import guru.nidi.graphviz.engine.Format;
+import guru.nidi.graphviz.engine.Graphviz;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
+import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
+
+import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -8,15 +15,6 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
-
-import javax.annotation.Nonnull;
-
-import org.apache.maven.model.Model;
-import org.apache.maven.model.io.xpp3.MavenXpp3Reader;
-import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
-
-import guru.nidi.graphviz.engine.Format;
-import guru.nidi.graphviz.engine.Graphviz;
 
 /**
  * The mvntools api class
@@ -47,7 +45,7 @@ public class MvnTools {
 
     /**
      * Get the default maven repository for the current user.
-     * 
+     *
      * @return File pointing to the maven repository
      */
     @Nonnull
@@ -58,7 +56,7 @@ public class MvnTools {
 
     /**
      * Read in the pom file and convert the output to a pom-like data structure.
-     * 
+     *
      * @param pom the pom file
      * @return Model containing the read-in pom
      */
@@ -75,9 +73,30 @@ public class MvnTools {
     }
 
     /**
+     * Read in the pom file and convert the output to a pom-like data structure.
+     *
+     * @param groupId    the group id
+     * @param artifactId the artifact id
+     * @param version    the version
+     * @return Model containing the read-in pom
+     */
+    @Nonnull
+    public static Model getModel(@Nonnull final String groupId, @Nonnull final String artifactId, @Nonnull final String version) {
+        final var prefix = String.format(
+                "%2$s%1$c%3$s%1$c%4$s%1$c%3$s-%4$s",
+                File.separatorChar,
+                groupId.replace('.', File.separatorChar),
+                artifactId,
+                version);
+
+        final var pom = new File(getRepository(), prefix + ".pom");
+        return getModel(pom);
+    }
+
+    /**
      * Generate, render and export a GraphViz graph for the given artifact into a
      * file.
-     * 
+     *
      * @param artifact the artifact
      * @param file     the output file
      * @throws IOException if any

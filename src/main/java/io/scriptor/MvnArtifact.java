@@ -18,13 +18,12 @@ import java.util.stream.Stream;
 
 import static guru.nidi.graphviz.model.Factory.graph;
 import static guru.nidi.graphviz.model.Factory.node;
+import static io.scriptor.MvnTools.fetchArtifact;
 
 /**
  * Representation of a maven artifact
  */
 public class MvnArtifact implements Iterable<MvnArtifact> {
-
-    public static boolean debug = false;
 
     /**
      * Cache for previously materialized artifacts, indexed by id
@@ -103,78 +102,6 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
     }
 
     /**
-     * Fetch a remote maven artifact into the local repository.
-     *
-     * @param groupId    the groupId
-     * @param artifactId the artifactId
-     * @param packaging  the packaging
-     * @param version    the version
-     * @param transitive if not only the artifacts pom is required
-     */
-    public static boolean fetchArtifact(
-            @Nonnull final String groupId,
-            @Nonnull final String artifactId,
-            @Nonnull final String packaging,
-            @Nonnull final String version,
-            final boolean transitive) {
-
-        final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
-        MvnTools.getLogger().info(() -> "Fetching artifact %s".formatted(fullId));
-
-        final var cwd = new File(".");
-
-        String exec;
-        try {
-            Runtime.getRuntime().exec("mvn", null, cwd).waitFor();
-            exec = "mvn";
-        } catch (final IOException a) {
-            try {
-                Runtime.getRuntime().exec("mvn.cmd", null, cwd).waitFor();
-                exec = "mvn.cmd";
-            } catch (final IOException b) {
-                MvnTools.getLogger().warning("no suitable maven executable found");
-                return false;
-            } catch (final InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        } catch (final InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-
-        final var procBuilder = new ProcessBuilder(
-                exec,
-                "dependency:get",
-                "-DgroupId=" + groupId,
-                "-DartifactId=" + artifactId,
-                "-Dpackaging=" + packaging,
-                "-Dversion=" + version,
-                "-Dtransitive=" + transitive)
-                .directory(cwd);
-        if (debug)
-            procBuilder.inheritIO();
-
-        final int code;
-        try {
-            code = procBuilder.start().waitFor();
-        } catch (final InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        } catch (final IOException e) {
-            MvnTools.getLogger().warning(e::getMessage);
-            return false;
-        }
-
-        if (code != 0) {
-            MvnTools.getLogger().warning(() -> "Failed to fetch artifact %s: Exit code %d".formatted(fullId, code));
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
      * Get a property from a map of strings indexed by strings, but only if the key
      * is in format "${...}".
      * This also works recursively.
@@ -218,7 +145,7 @@ public class MvnArtifact implements Iterable<MvnArtifact> {
      * @param props the properties
      * @param dep   the dependency model
      * @return the materialized dependency artifact, or null if optional or not
-     *         compile scope
+     * compile scope
      */
     @Nonnull
     private static Optional<MvnArtifact> resolveDependency(

@@ -22,6 +22,7 @@ import java.util.logging.Logger;
 public class MvnTools {
 
     private static final Logger logger = Logger.getLogger("io.scriptor");
+    private static final String ID_FORMAT = "%s:%s:%s:%s";
 
     static {
         final var handler = new ConsoleHandler();
@@ -91,6 +92,77 @@ public class MvnTools {
 
         final var pom = new File(getRepository(), prefix + ".pom");
         return getModel(pom);
+    }
+
+    /**
+     * Fetch a remote maven artifact into the local repository.
+     *
+     * @param groupId    the groupId
+     * @param artifactId the artifactId
+     * @param packaging  the packaging
+     * @param version    the version
+     * @param transitive if not only the artifacts pom is required
+     */
+    public static boolean fetchArtifact(
+            @Nonnull final String groupId,
+            @Nonnull final String artifactId,
+            @Nonnull final String packaging,
+            @Nonnull final String version,
+            final boolean transitive) {
+
+        final var fullId = ID_FORMAT.formatted(groupId, artifactId, packaging, version);
+        getLogger().info(() -> "Fetching artifact %s".formatted(fullId));
+
+        final var cwd = new File(".");
+
+        String exec;
+        try {
+            Runtime.getRuntime().exec("mvn", null, cwd).waitFor();
+            exec = "mvn";
+        } catch (final IOException a) {
+            try {
+                Runtime.getRuntime().exec("mvn.cmd", null, cwd).waitFor();
+                exec = "mvn.cmd";
+            } catch (final IOException b) {
+                getLogger().warning("no suitable maven executable found");
+                return false;
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+
+        final var procBuilder = new ProcessBuilder(
+                exec,
+                "dependency:get",
+                "-DgroupId=" + groupId,
+                "-DartifactId=" + artifactId,
+                "-Dpackaging=" + packaging,
+                "-Dversion=" + version,
+                "-Dtransitive=" + transitive)
+                .inheritIO()
+                .directory(cwd);
+
+        final int code;
+        try {
+            code = procBuilder.start().waitFor();
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (final IOException e) {
+            getLogger().warning(e::getMessage);
+            return false;
+        }
+
+        if (code != 0) {
+            getLogger().warning(() -> "Failed to fetch artifact %s: Exit code %d".formatted(fullId, code));
+            return false;
+        }
+
+        return true;
     }
 
     /**
